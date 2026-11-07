@@ -1,0 +1,14 @@
+[project]
+name = "mainframe-ghost"
+version = "0.1.0"
+description = "1959 IBM z/OS COBOL to AWS Bedrock & Lambda parity sentinel"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["fastmcp==4.1.6"]
+dev = ["pytest==9.2.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

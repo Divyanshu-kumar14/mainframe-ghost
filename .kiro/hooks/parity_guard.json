@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Mainframe Parity Sentinel Guard",
+      "description": "Intercepts tool execution, runs the dual-engine shadow fuzzer against IBM z/OS golden records, and vetoes with POSIX Exit Code 2 on semantic drift.",
+      "trigger": "PreToolUse",
+      "matcher": "^(fs_write|fs_append|str_replace|execute_bash)$|deploy_lambda",
+      "action": {
+        "type": "command",
+        "command": ".kiro/hooks/bin/verify_modernization_parity.sh"
+      },
+      "timeout": 30,
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mainframe-inspector": {
+      "command": "uv",
+      "args": ["run", "--no-project", "--with", "fastmcp==4.1.6", "python", ".kiro/mcp/server.py"],
+      "env": { "FASTMCP_LOG_LEVEL": "ERROR" },
+      "disabled": false
+    }
+  }
+}
