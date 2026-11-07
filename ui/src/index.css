@@ -166,17 +166,39 @@ body {
 }
 
 @keyframes crt-roll {
-  from { top: -20%; }
-  to { top: 110%; }
+  from {
+    top: -20%;
+  }
+
+  to {
+    top: 110%;
+  }
 }
 
 @keyframes crt-flicker {
-  0% { opacity: 0.982; }
-  20% { opacity: 1; }
-  40% { opacity: 0.988; }
-  60% { opacity: 0.996; }
-  80% { opacity: 0.985; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0.982;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  40% {
+    opacity: 0.988;
+  }
+
+  60% {
+    opacity: 0.996;
+  }
+
+  80% {
+    opacity: 0.985;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 .crt-flicker {
@@ -185,9 +207,22 @@ body {
 
 /* Power-on: beam expands from a horizontal line */
 @keyframes crt-on {
-  0% { transform: scale(1, 0.004); filter: brightness(4); opacity: 0.4; }
-  45% { transform: scale(1, 0.004); filter: brightness(4); opacity: 1; }
-  100% { transform: scale(1, 1); filter: brightness(1); }
+  0% {
+    transform: scale(1, 0.004);
+    filter: brightness(4);
+    opacity: 0.4;
+  }
+
+  45% {
+    transform: scale(1, 0.004);
+    filter: brightness(4);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1, 1);
+    filter: brightness(1);
+  }
 }
 
 .crt-power-on {
@@ -196,8 +231,15 @@ body {
 
 /* Abend: red flash across the tube */
 @keyframes abend-flash {
-  0%, 100% { box-shadow: inset 0 0 0 rgba(var(--abend-glow), 0); }
-  50% { box-shadow: inset 0 0 120px rgba(var(--abend-glow), 0.45); }
+
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 rgba(var(--abend-glow), 0);
+  }
+
+  50% {
+    box-shadow: inset 0 0 120px rgba(var(--abend-glow), 0.45);
+  }
 }
 
 .crt-abend {
@@ -205,7 +247,9 @@ body {
 }
 
 @keyframes blink {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 
 .blink {
@@ -213,8 +257,15 @@ body {
 }
 
 @keyframes veto-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.72; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
 }
 
 .veto-pulse {
@@ -240,13 +291,701 @@ body {
   scrollbar-color: var(--ph-dim) transparent;
 }
 
+/* ------------------------------------------------------------------ CRT glass overlays */
+/* Standalone scanline and vignette layers for full-viewport screens (the intro). */
+.crt-scanlines {
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 6px 100%;
+}
+
+.crt-vignette {
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%);
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.85);
+}
+
+/* ------------------------------------------------------------------ Kiroween intro */
+/* P31 green fused with pumpkin amber. Fixed palette: the intro ignores the phosphor toggle. */
+.kw-root {
+  --kw-green: #33ff33;
+  --kw-green-soft: rgba(170, 255, 170, 0.82);
+  --kw-amber: #ff8c00;
+  --kw-amber-hi: #ffb347;
+  --kw-red: #ff3333;
+  --kw-bg: #030803;
+  background:
+    radial-gradient(ellipse 60% 50% at 30% 30%, rgba(51, 255, 51, 0.11) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 40% at 28% 32%, rgba(155, 92, 255, 0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 90% 40% at 50% 108%, rgba(255, 140, 0, 0.17) 0%, transparent 70%),
+    var(--kw-bg);
+  color: var(--kw-green);
+}
+
+.kw-green {
+  color: var(--kw-green);
+  text-shadow:
+    0 0 2px rgba(51, 255, 51, 0.9),
+    0 0 8px rgba(51, 255, 51, 0.5),
+    0 0 18px rgba(51, 255, 51, 0.22);
+}
+
+.kw-soft {
+  color: var(--kw-green-soft);
+  text-shadow: 0 0 6px rgba(51, 255, 51, 0.18);
+}
+
+.kw-dim {
+  color: #2e9e2e;
+  text-shadow: 0 0 4px rgba(51, 255, 51, 0.2);
+}
+
+.kw-amber {
+  color: var(--kw-amber);
+  text-shadow:
+    0 0 2px rgba(255, 140, 0, 0.9),
+    0 0 8px rgba(255, 140, 0, 0.55),
+    0 0 18px rgba(255, 140, 0, 0.25);
+}
+
+/* Glitch title: amber and cyan ghosts tear through on horizontal-hold loss. */
+.kw-title {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  letter-spacing: 0.08em;
+  color: var(--kw-green);
+  text-shadow:
+    0 0 3px rgba(51, 255, 51, 1),
+    0 0 12px rgba(51, 255, 51, 0.65),
+    0 0 30px rgba(51, 255, 51, 0.3);
+}
+
+.kw-title::before,
+.kw-title::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  text-shadow: none;
+}
+
+.kw-title::before {
+  color: var(--kw-amber);
+  animation: kw-title-a 4.6s linear infinite;
+}
+
+.kw-title::after {
+  color: #33ddff;
+  animation: kw-title-b 4.6s linear infinite;
+}
+
+@keyframes kw-title-a {
+
+  0%,
+  88%,
+  92.5%,
+  100% {
+    opacity: 0;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+
+  89% {
+    opacity: 0.9;
+    transform: translate(-6px, 0);
+    clip-path: inset(8% 0 58% 0);
+  }
+
+  90.5% {
+    opacity: 0.8;
+    transform: translate(5px, 0);
+    clip-path: inset(62% 0 6% 0);
+  }
+
+  91.5% {
+    opacity: 0.6;
+    transform: translate(-2px, 0);
+    clip-path: inset(32% 0 40% 0);
+  }
+}
+
+@keyframes kw-title-b {
+
+  0%,
+  88%,
+  92.5%,
+  100% {
+    opacity: 0;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+
+  89% {
+    opacity: 0.7;
+    transform: translate(6px, 0);
+    clip-path: inset(55% 0 12% 0);
+  }
+
+  90.5% {
+    opacity: 0.6;
+    transform: translate(-4px, 0);
+    clip-path: inset(10% 0 66% 0);
+  }
+
+  91.5% {
+    opacity: 0.5;
+    transform: translate(3px, 0);
+    clip-path: inset(44% 0 30% 0);
+  }
+}
+
+/* Horizontal hold sync loss: still for ~4 s, then a violent skew-and-snap. */
+@keyframes kw-hsync {
+
+  0%,
+  88%,
+  92%,
+  95%,
+  96.4%,
+  100% {
+    transform: translate3d(0, 0, 0) skewX(0deg);
+    filter: none;
+  }
+
+  89% {
+    transform: translate3d(-9px, 0, 0) skewX(-14deg);
+    filter: brightness(1.6);
+  }
+
+  90% {
+    transform: translate3d(7px, 1px, 0) skewX(10deg);
+    filter: brightness(1.3);
+  }
+
+  91% {
+    transform: translate3d(-3px, -1px, 0) skewX(-4deg) scaleY(1.04);
+  }
+
+  95.7% {
+    transform: translate3d(5px, 0, 0) skewX(6deg);
+  }
+}
+
+.kw-hsync {
+  animation: kw-hsync 4.6s linear infinite;
+}
+
+@keyframes kw-chroma-a {
+
+  0%,
+  88%,
+  92.5%,
+  95%,
+  96.5%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  89% {
+    opacity: 0.85;
+    transform: translate(-7px, 0);
+  }
+
+  90.5% {
+    opacity: 0.7;
+    transform: translate(5px, -1px);
+  }
+
+  91.5% {
+    opacity: 0.5;
+    transform: translate(-3px, 0);
+  }
+
+  95.7% {
+    opacity: 0.6;
+    transform: translate(4px, 0);
+  }
+}
+
+@keyframes kw-chroma-b {
+
+  0%,
+  88%,
+  92.5%,
+  95%,
+  96.5%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  89% {
+    opacity: 0.7;
+    transform: translate(7px, 1px);
+  }
+
+  90.5% {
+    opacity: 0.6;
+    transform: translate(-5px, 0);
+  }
+
+  91.5% {
+    opacity: 0.4;
+    transform: translate(3px, 0);
+  }
+
+  95.7% {
+    opacity: 0.5;
+    transform: translate(-4px, 0);
+  }
+}
+
+.kw-chroma-a {
+  animation: kw-chroma-a 4.6s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.kw-chroma-b {
+  animation: kw-chroma-b 4.6s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes kw-tear {
+
+  0%,
+  88.5%,
+  92%,
+  100% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  89% {
+    transform: translateX(16px);
+    opacity: 1;
+  }
+
+  90% {
+    transform: translateX(-12px);
+    opacity: 1;
+  }
+
+  91% {
+    transform: translateX(6px);
+    opacity: 1;
+  }
+}
+
+.kw-tear {
+  animation: kw-tear 4.6s linear infinite;
+}
+
+.kw-tear-rev {
+  animation: kw-tear 4.6s linear infinite reverse;
+}
+
+/* Ghost motion */
+@keyframes kw-bob {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.kw-bob {
+  animation: kw-bob 5s ease-in-out infinite;
+}
+
+@keyframes kw-shadow {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: scale(0.82);
+    opacity: 0.3;
+  }
+}
+
+.kw-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kw-shadow 5s ease-in-out infinite;
+}
+
+@keyframes kw-flap {
+
+  0%,
+  100% {
+    transform: rotate(0deg) scaleY(1);
+  }
+
+  50% {
+    transform: rotate(-12deg) scaleY(0.84);
+  }
+}
+
+.kw-wing {
+  transform-box: fill-box;
+  transform-origin: 100% 40%;
+  animation: kw-flap 1.5s ease-in-out infinite;
+}
+
+@keyframes kw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.kw-reel {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kw-spin 2.8s linear infinite;
+}
+
+.kw-reel-slow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kw-spin 3.9s linear infinite;
+}
+
+@keyframes kw-candle {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  22% {
+    opacity: 0.72;
+  }
+
+  40% {
+    opacity: 0.95;
+  }
+
+  58% {
+    opacity: 0.66;
+  }
+
+  76% {
+    opacity: 0.9;
+  }
+}
+
+.kw-candle {
+  animation: kw-candle 1.9s ease-in-out infinite;
+}
+
+.kw-pumpkin {
+  filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.55));
+}
+
+/* Atmosphere: fog, bats, rising EBCDIC spirits */
+@keyframes kw-fog {
+  from {
+    transform: translateX(-8%);
+  }
+
+  to {
+    transform: translateX(8%);
+  }
+}
+
+.kw-fog {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: 0;
+  height: 45%;
+  pointer-events: none;
+  filter: blur(10px);
+  background:
+    radial-gradient(ellipse 30% 55% at 18% 85%, rgba(140, 255, 140, 0.07), transparent 70%),
+    radial-gradient(ellipse 30% 45% at 52% 95%, rgba(255, 140, 0, 0.08), transparent 70%),
+    radial-gradient(ellipse 28% 50% at 84% 88%, rgba(140, 255, 140, 0.06), transparent 70%);
+  animation: kw-fog 18s ease-in-out infinite alternate;
+}
+
+@keyframes kw-bat-path {
+  0% {
+    transform: translate3d(-12vw, 0, 0);
+  }
+
+  25% {
+    transform: translate3d(22vw, -4vh, 0);
+  }
+
+  50% {
+    transform: translate3d(52vw, 3vh, 0);
+  }
+
+  75% {
+    transform: translate3d(82vw, -3vh, 0);
+  }
+
+  100% {
+    transform: translate3d(112vw, 1vh, 0);
+  }
+}
+
+.kw-bat {
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+  animation: kw-bat-path var(--kw-dur, 20s) linear infinite;
+  animation-delay: var(--kw-delay, 0s);
+}
+
+@keyframes kw-bat-wings {
+  from {
+    transform: scaleY(1);
+  }
+
+  to {
+    transform: scaleY(0.35);
+  }
+}
+
+.kw-bat-wings {
+  transform-origin: center 45%;
+  animation: kw-bat-wings 0.26s ease-in-out infinite alternate;
+}
+
+@keyframes kw-spirit {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+
+  15%,
+  80% {
+    opacity: var(--kw-op, 0.3);
+  }
+
+  100% {
+    transform: translate3d(var(--kw-drift, 20px), -75vh, 0);
+    opacity: 0;
+  }
+}
+
+.kw-spirit {
+  position: absolute;
+  bottom: -2rem;
+  pointer-events: none;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  animation: kw-spirit var(--kw-dur, 14s) linear infinite;
+  animation-delay: var(--kw-delay, 0s);
+}
+
+/* Lore cards: staggered materialisation, amber haunt on hover */
+@keyframes kw-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.kw-rise-in {
+  animation: kw-rise-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  animation-delay: var(--kw-delay, 0ms);
+}
+
+.kw-card {
+  position: relative;
+  border: 1px solid rgba(51, 255, 51, 0.32);
+  background: linear-gradient(180deg, rgba(51, 255, 51, 0.06), rgba(3, 8, 3, 0.88) 70%);
+  box-shadow:
+    0 0 14px rgba(51, 255, 51, 0.1),
+    inset 0 0 24px rgba(51, 255, 51, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.kw-card[data-tone='amber'] {
+  border-color: rgba(255, 140, 0, 0.45);
+  background: linear-gradient(180deg, rgba(255, 140, 0, 0.07), rgba(3, 8, 3, 0.88) 70%);
+  box-shadow:
+    0 0 14px rgba(255, 140, 0, 0.12),
+    inset 0 0 24px rgba(255, 140, 0, 0.05);
+}
+
+.kw-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 140, 0, 0.8);
+  box-shadow:
+    0 0 24px rgba(255, 140, 0, 0.28),
+    inset 0 0 30px rgba(255, 140, 0, 0.08);
+}
+
+/* Bracket corners, like a 3270 protected field */
+.kw-card::before,
+.kw-card::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  border-color: var(--kw-amber);
+  opacity: 0.8;
+}
+
+.kw-card::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+
+.kw-card::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+}
+
+/* Action buttons */
+@keyframes kw-btn-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 16px rgba(51, 255, 51, 0.4), inset 0 0 16px rgba(51, 255, 51, 0.16);
+  }
+
+  50% {
+    box-shadow: 0 0 34px rgba(51, 255, 51, 0.7), inset 0 0 22px rgba(51, 255, 51, 0.26);
+  }
+}
+
+.kw-btn-primary {
+  border: 2px solid var(--kw-green);
+  background: rgba(51, 255, 51, 0.1);
+  color: var(--kw-green);
+  text-shadow: 0 0 6px rgba(51, 255, 51, 0.8);
+  animation: kw-btn-pulse 2.2s ease-in-out infinite;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.kw-btn-primary:hover,
+.kw-btn-primary:focus-visible {
+  background: var(--kw-green);
+  color: #031203;
+  text-shadow: none;
+}
+
+.kw-btn-veto {
+  border: 1px solid rgba(255, 51, 51, 0.8);
+  background: rgba(255, 51, 51, 0.07);
+  color: var(--kw-amber-hi);
+  text-shadow: 0 0 6px rgba(255, 140, 0, 0.6);
+  box-shadow: 0 0 12px rgba(255, 51, 51, 0.25), inset 0 0 12px rgba(255, 51, 51, 0.1);
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.kw-btn-veto:hover,
+.kw-btn-veto:focus-visible {
+  background: var(--kw-red);
+  color: #1a0000;
+  text-shadow: none;
+  box-shadow: 0 0 26px rgba(255, 51, 51, 0.7);
+}
+
+.kw-root :focus-visible {
+  outline: 2px dashed var(--kw-amber);
+  outline-offset: 4px;
+}
+
+.kw-intro-btn {
+  border-color: rgba(255, 140, 0, 0.6);
+  color: #ff8c00;
+  text-shadow: 0 0 6px rgba(255, 140, 0, 0.6);
+  box-shadow: 0 0 6px rgba(255, 140, 0, 0.25), inset 0 0 10px rgba(255, 140, 0, 0.08);
+}
+
+.kw-intro-btn:hover {
+  background: #ff8c00;
+  color: #140700;
+  text-shadow: none;
+}
+
+/* Exit: the beam collapses to a line, then a dot */
+@keyframes kw-power-off {
+  0% {
+    transform: scale(1, 1);
+    filter: brightness(1);
+    opacity: 1;
+  }
+
+  55% {
+    transform: scale(1, 0.006);
+    filter: brightness(3);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0, 0.006);
+    filter: brightness(5);
+    opacity: 0;
+  }
+}
+
+.kw-power-off {
+  animation: kw-power-off 0.48s cubic-bezier(0.6, 0, 0.9, 0.4) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
+
   .crt-flicker,
   .crt-roll,
   .crt-power-on,
   .crt-abend,
   .blink,
-  .veto-pulse {
+  .veto-pulse,
+  .kw-title::before,
+  .kw-title::after,
+  .kw-hsync,
+  .kw-chroma-a,
+  .kw-chroma-b,
+  .kw-tear,
+  .kw-tear-rev,
+  .kw-bob,
+  .kw-shadow,
+  .kw-wing,
+  .kw-reel,
+  .kw-reel-slow,
+  .kw-candle,
+  .kw-fog,
+  .kw-bat,
+  .kw-bat-wings,
+  .kw-spirit,
+  .kw-rise-in,
+  .kw-btn-primary,
+  .kw-power-off {
     animation: none !important;
+  }
+
+  .kw-bat,
+  .kw-spirit {
+    display: none;
   }
 }

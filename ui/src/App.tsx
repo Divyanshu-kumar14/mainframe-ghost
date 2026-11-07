@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GhostTerminal } from './components/GhostTerminal';
+import { INTRO_DISMISSED_KEY, KiroweenIntro, type IntroExit } from './components/KiroweenIntro';
 import { Sentinel } from './components/Sentinel';
 import { ALIASES, CANDIDATES, DATA, candidateById, type Candidate } from './data/vectors';
 import { api, ApiError, health, type Health, type VerifyResult } from './lib/api';
@@ -48,6 +49,14 @@ function liveVerdict(res: VerifyResult): Verdict {
 }
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return !sessionStorage.getItem(INTRO_DISMISSED_KEY);
+    } catch {
+      return true; // storage blocked: show the intro, it is always dismissible
+    }
+  });
   const [phosphor, setPhosphor] = useState<Phosphor>('green');
   const [muted, setMuted] = useState(false);
   const [page, setPage] = useState<PageId>('fuzz');
@@ -242,6 +251,33 @@ export default function App() {
 
   const busy = run.phase !== 'idle' && run.phase !== 'verdict' && !run.error;
 
+  const openIntro = useCallback(() => {
+    terminalAudio.unlock();
+    terminalAudio.keystroke(true);
+    setMessage(null);
+    setShowIntro(true);
+  }, []);
+
+  const closeIntro = useCallback(
+    (action: IntroExit, skip: boolean) => {
+      try {
+        if (skip) sessionStorage.setItem(INTRO_DISMISSED_KEY, 'true');
+        else sessionStorage.removeItem(INTRO_DISMISSED_KEY);
+      } catch {
+        // storage unavailable (private mode): the intro simply shows again next load
+      }
+      setShowIntro(false);
+      if (action === 'veto') {
+        // Negative control: the IEEE 754 float() port, which the hook vetoes with exit 2.
+        const floatPort = candidateById('float');
+        if (!floatPort) return;
+        selectCandidate(floatPort.id);
+        deploy(floatPort.id, floatPort.source.join('\n'), false);
+      }
+    },
+    [deploy, selectCandidate],
+  );
+
   const execute = useCallback(
     (raw: string) => {
       const text = raw.trim().replace(/\s+/g, ' ');
@@ -275,15 +311,23 @@ export default function App() {
       else if (['AMBER', 'P4'].includes(cmd)) setPhosphor('amber');
       else if (['SOUND', 'MUTE'].includes(cmd)) setMuted((m) => !m);
       else if (cmd === 'RESET') reset();
+      else if (cmd === 'INTRO') openIntro();
       else setMessage({ text: `INVALID COMMAND: ${cmd.slice(0, 30)}   TRY LAB FOR HELP, DEPLOY H|V|FLOOR|U`, error: true });
     },
-    [busy, copybook, deploy, inject, parseCopybook, reset, runLab, selectCandidate],
+    [busy, copybook, deploy, inject, openIntro, parseCopybook, reset, runLab, selectCandidate],
   );
 
   // 3270 keyboard: PF keys, command line, Enter to execute. Text fields keep their keys.
+  // While the intro is up it owns the keyboard (Enter/Space/Escape), so the 3270 handler stands down.
   useEffect(() => {
+    if (showIntro) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'F12') {
+        e.preventDefault();
+        openIntro();
+        return;
+      }
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       const editing = tag === 'TEXTAREA' || tag === 'INPUT' || target?.isContentEditable;
@@ -325,7 +369,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [execute]);
+  }, [execute, openIntro, showIntro]);
 
   const rows = useMemo(
     () => buildScreen({ page, run, command, message, abend, layout, lab }),
@@ -341,6 +385,10 @@ export default function App() {
 
   const mode = apiState === 'checking' ? 'CHECKING ENGINE' : live ? 'LIVE ENGINE' : apiUp ? 'PUBLIC: PRESET VERDICTS' : 'OFFLINE: PRESET VERDICTS';
 
+  // The cockpit unmounts behind the intro so its CRT power-on plays again on entry. All run
+  // state lives here in App, so nothing is lost.
+  if (showIntro) return <KiroweenIntro onExit={closeIntro} />;
+
   return (
     <div className="mx-auto flex min-h-full max-w-[1680px] flex-col gap-4 p-4 lg:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -350,7 +398,15 @@ export default function App() {
             KIRO PreToolUse GATE FOR AI-PORTED COBOL // VERIFIED AGAINST GNUCOBOL, BYTE FOR BYTE
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[11px] tracking-[0.2em]">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] tracking-[0.2em]">
+          <button
+            type="button"
+            onClick={openIntro}
+            title="Reopen the Kiroween 2026 showcase (F12 or command INTRO)"
+            className="kw-intro-btn rounded-sm border px-3 py-1.5"
+          >
+            [ <span aria-hidden="true">🎃</span> INTRO ]
+          </button>
           <span
             title={live ? `cockpit/server.py on this machine, sandbox ${typeof apiState === 'object' && apiState ? apiState.sandbox : ''}` : 'Verdicts were exported by scripts/export_ui_vectors.py from the real hook'}
             className={`rounded-sm border px-3 py-1.5 ${live ? 'ph-inverse border-transparent' : 'glow-border phosphor-dim'}`}
@@ -424,7 +480,7 @@ export default function App() {
 
       <footer className="phosphor-dim flex flex-wrap justify-between gap-2 text-[10px] tracking-[0.15em]">
         <span>
-          COMMANDS: DEPLOY H|V|FLOOR|U  UNPACK  PACK  ZONED  SORT  LAYOUT  GREEN AMBER RESET // PF1-PF6 PANELS // PF9 PHOSPHOR
+          COMMANDS: DEPLOY H|V|FLOOR|U  UNPACK  PACK  ZONED  SORT  LAYOUT  GREEN AMBER RESET INTRO // PF1-PF6 PANELS // PF9 PHOSPHOR // F12 INTRO
         </span>
         <span>
           PRESETS: scripts/export_ui_vectors.py @ {DATA.generated_at} // SEED {DATA.seed}
