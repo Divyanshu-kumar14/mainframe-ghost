@@ -167,6 +167,7 @@ python3 -m services.bedrock_transpiler cobol/src/intaccr_batch.cbl --dry-run    
 
 A React 19 recreation of an IBM 3278-2 terminal (80×24, P31 green or P4 amber phosphor). It talks to the real engine through [`cockpit/server.py`](cockpit/server.py), which uses only the Python standard library.
 
+- **Intro screen:** a Kiroween title screen opens first. Enter or **INITIALIZE 3270 COCKPIT** goes to the cockpit; **Trigger Float Drift VETO** deploys the float candidate straight into the exit 2 veto. Tick *Skip intro on subsequent visits* to skip it for the rest of the browser session; **[🎃 INTRO]**, F12 or the `INTRO` command reopens it.
 - **Sentinel panel:** choose a candidate or edit its code, then press **RUN PreToolUse HOOK**. The code goes to `verify_stdin()`, the same function the hook script calls, and the panel shows the verdict, drift count, misposted total and hook transcript.
 - **COPYBOOK tab:** paste any copybook; PF1 shows offsets, REDEFINES overlays and SYNC slack.
 - **PF6 lab:** `UNPACK 40404040 S9(5)V99`, `PACK -1234567.89 S9(7)V99`, `ZONED 1234N S9(5)`, `SORT 100ACC ACC100 acc100`.

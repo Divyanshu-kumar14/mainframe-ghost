@@ -38,11 +38,12 @@ const VETO_STAT = FLOAT
 
 type BootLine = { label: string; status?: string; amber?: boolean; cursor?: boolean };
 
+// Static facts about the exported data, not live probes: the intro cannot see the engine.
 const BOOT: BootLine[] = [
-  { label: 'IPL 0A82  LOADPARM KIROWEEN' },
-  { label: `ORACLE  ${DATA.oracle.compiler}`, status: 'ONLINE' },
-  { label: `ACCTIN  ${fmt(DATA.records)} BINARY RECORDS`, status: 'LOADED' },
-  { label: `HOOK    ${HOOK.trigger} parity_guard.json`, status: 'ARMED' },
+  { label: 'MAINFRAMEGHOST COLD START' },
+  { label: `ORACLE  ${DATA.oracle.compiler}`, status: 'FIXTURES' },
+  { label: `ACCTIN  ${fmt(DATA.records)} BINARY RECORDS`, status: `SEED ${DATA.seed}` },
+  { label: `HOOK    ${HOOK.trigger} parity_guard.json`, status: `EXIT ${VETO_EXIT}` },
   { label: 'SPIRIT OF 1959', status: 'RISEN', amber: true },
   { label: 'AWAITING OPERATOR', cursor: true },
 ];
@@ -64,23 +65,23 @@ const LORE: Lore[] = [
     kicker: 'LORE 01',
     title: 'THE 1959 CURSE',
     body:
-      'COBOL dates from 1959 and still runs core banking: an estimated 220B lines moving about $3T a day. Most modernization projects fail or run over budget, and the quiet killers are float drift and S0C7 data exceptions.',
+      'COBOL dates from 1959 and still runs core banking: an estimated 220B lines moving about $3T a day. Most modernization projects fail or run over budget. This gate targets two bugs a port can hide: IEEE 754 float drift and S0C7 data exceptions.',
     foot: 'FIGURES: INDUSTRY ESTIMATES',
     tone: 'amber',
   },
   {
     icon: '⚡',
     kicker: 'LORE 02',
-    title: 'THE HARDWARE ORACLE',
-    body: `Zero Python-on-Python mocks. Every AI port is diffed byte for byte against real compiled GnuCOBOL ${ORACLE_VERSION} output over ${fmt(DATA.records)} binary account records.`,
-    foot: DATA.oracle.runner.toUpperCase(),
+    title: 'THE COMPILED ORACLE',
+    body: `Drift is not judged by another Python model. Each proposed port runs in a sandbox and must match, to the cent and scale, the output of compiled GnuCOBOL ${ORACLE_VERSION} on ${fmt(DATA.records)} binary account records.`,
+    foot: 'COBOL OUTPUT: cobol/fixtures/ // SHA-256 PINNED',
     tone: 'green',
   },
   {
     icon: '🛡️',
     kicker: 'LORE 03',
     title: 'THE KIRO SENTINEL',
-    body: `Kiro's ${HOOK.trigger} IDE hook intercepts the write, runs the shadow fuzzer, and vetoes drift with POSIX exit code ${VETO_EXIT} before a corrupted ledger reaches AWS.`,
+    body: `Kiro's ${HOOK.trigger} IDE hook intercepts the write, runs the shadow fuzzer, and vetoes drift with POSIX exit code ${VETO_EXIT}. The drifting file is never written.`,
     foot: VETO_STAT,
     tone: 'amber',
   },
@@ -410,8 +411,8 @@ export function KiroweenIntro({ onExit }: Props) {
                 </span>
               </h1>
               <p id="kw-tagline" className="kw-soft max-w-xl text-sm leading-relaxed sm:text-[15px]">
-                1959 COBOL arithmetic, resurrected byte for byte. Kiro refuses any AI-ported service that drifts from the
-                compiled COBOL by a single cent.
+                Mainframe COBOL arithmetic, resurrected byte for byte. A Kiro hook blocks any proposed port whose output
+                differs from the compiled COBOL by a single cent.
               </p>
 
               <pre
