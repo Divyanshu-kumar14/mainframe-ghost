@@ -227,7 +227,7 @@ def scan_payload(payload: dict, root: Path | None = None) -> list[Violation]:
     if _is_exempt(rel):
         return []
     chunks = [params[k] for k in _CONTENT_KEYS if isinstance(params.get(k), str)]
-    if not chunks:  # deploy-style call: scan the file on disk (read only, never executed)
+    if not chunks:  # deploy-style call: scan the file on disk (execution happens in check_candidate)
         target = Path(path) if Path(path).is_absolute() else root / path
         try:
             if target.is_file() and target.stat().st_size <= MAX_SCAN_BYTES:
@@ -747,7 +747,7 @@ def verify_stdin(raw: str, records: int, seed: int) -> tuple[int, ParityReport]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="MainframeGhost dual-engine parity fuzzer")
+    parser = argparse.ArgumentParser(description="MainframeGhost parity sentinel: engines and candidate vs GnuCOBOL")
     parser.add_argument("--records", type=int, default=DEFAULT_RECORDS)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--verify-stdin", action="store_true",

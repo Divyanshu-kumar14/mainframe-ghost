@@ -17,7 +17,7 @@ from decimal import Decimal
 def accrue_monthly_interest(balance: Decimal, annual_rate: Decimal) -> Decimal:
     """Accrue interest using naive IEEE 754 floats and banker's rounding.
 
-    BUG: Causes ~50% of accounts to drift by $0.01 against IBM System/390 truncation.
+    BUG: about half of all accounts drift by $0.01 against the COBOL truncation.
     """
     value = round(float(balance) * float(annual_rate) / 12.0, 2)
     return Decimal(str(value))

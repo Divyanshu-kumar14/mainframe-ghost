@@ -1,1 +1,1 @@
-"""MainframeGhost parity engine: IBM System/390 data semantics in pure Python."""
+"""MainframeGhost parity engine: COBOL data semantics (COMP-3, zoned, EBCDIC, copybook layout) in pure Python."""

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T22:08:00Z",
+  "generated_at": "2026-11-07T22:21:27Z",
   "seed": 1959,
   "records": 10000,
   "copybook": {
@@ -822,7 +822,7 @@
     "hooks": [
       {
         "name": "Mainframe Parity Sentinel Guard",
-        "description": "Intercepts tool execution, runs the dual-engine shadow fuzzer against IBM z/OS golden records, and vetoes with POSIX Exit Code 2 on semantic drift.",
+        "description": "Before a write, runs the proposed Python against GnuCOBOL output in a sandbox and vetoes with POSIX Exit Code 2 on any drift or float use.",
         "trigger": "PreToolUse",
         "matcher": "^(fs_write|fs_append|str_replace|execute_bash)$|deploy_lambda",
         "action": {
@@ -1161,7 +1161,7 @@
         "def accrue_monthly_interest(balance: Decimal, annual_rate: Decimal) -> Decimal:",
         "    \"\"\"Accrue interest using naive IEEE 754 floats and banker's rounding.",
         "",
-        "    BUG: Causes ~50% of accounts to drift by $0.01 against IBM System/390 truncation.",
+        "    BUG: about half of all accounts drift by $0.01 against the COBOL truncation.",
         "    \"\"\"",
         "    value = round(float(balance) * float(annual_rate) / 12.0, 2)",
         "    return Decimal(str(value))",

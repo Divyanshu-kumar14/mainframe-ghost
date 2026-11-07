@@ -10,6 +10,18 @@ Source of truth: `specs/PRD.md` (Sections 4, 5.1, 8). All requirements use EARS 
 - **S0C7**: Synthetic Decimal Data Exception raised on invalid packed/zoned nibbles.
 - **Sentinel**: The PreToolUse hook `.kiro/hooks/bin/verify_modernization_parity.sh`.
 
+## Golden Test Vectors
+
+These must never be weakened to make a test pass.
+
+| Vector | Input | Expected |
+| :-: | :--- | :--- |
+| A | `-1234567.89` as `PIC S9(7)V99 COMP-3` | `12 34 56 78 9D` (5 bytes), decodes back to `-1234567.89` |
+| B | `+12345` / `-12345` as `PIC S9(5)` zoned | `F1 F2 F3 F4 C5` = `"1234E"` / `F1 F2 F3 F4 D5` = `"1234N"` |
+| C | sort `["100ACC", "ACC100", "acc100"]` | EBCDIC CP-037 order `["acc100", "ACC100", "100ACC"]` |
+| D | `+123456` / `-123456` as `PIC S9(6) COMP-3` | `01 23 45 6C` / `01 23 45 6D` (leading `0x0` pad nibble) |
+| E | `40 40 40 40` as `PIC S9(5)V99 COMP-3` | S0C7: sign nibble `0x0` invalid; hook exits 2 |
+
 ## REQ-MF-001: Decimal Precision
 
 **Statement:** *When* computing monetary calculations, the transpiled system *shall* utilize arbitrary-precision fixed-point decimal arithmetic with explicit scale matching the COBOL `PIC` declaration.

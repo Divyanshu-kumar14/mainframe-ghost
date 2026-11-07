@@ -3,7 +3,7 @@
   "hooks": [
     {
       "name": "Mainframe Parity Sentinel Guard",
-      "description": "Intercepts tool execution, runs the dual-engine shadow fuzzer against IBM z/OS golden records, and vetoes with POSIX Exit Code 2 on semantic drift.",
+      "description": "Before a write, runs the proposed Python against GnuCOBOL output in a sandbox and vetoes with POSIX Exit Code 2 on any drift or float use.",
       "trigger": "PreToolUse",
       "matcher": "^(fs_write|fs_append|str_replace|execute_bash)$|deploy_lambda",
       "action": {
