@@ -12,10 +12,10 @@ PYTHON_BIN="${MAINFRAME_GHOST_PYTHON:-python3}"
 PAYLOAD="$(cat || true)"
 [ -n "$PAYLOAD" ] || PAYLOAD="{}"
 
-# Bootstrap: do not deadlock scaffolding before the engine exists.
+# Fail closed: without the sentinel engine nothing can be verified.
 if [ ! -f "$FUZZER" ]; then
-    echo "[WARN] Parity Sentinel: $FUZZER not found yet; skipping verification (bootstrap mode)." >&2
-    exit 0
+    echo "[VETO] Parity Sentinel: $FUZZER is missing; refusing to approve unverified tool calls." >&2
+    exit 2
 fi
 
 OUTPUT="$(printf '%s' "$PAYLOAD" | "$PYTHON_BIN" "$FUZZER" --verify-stdin 2>&1)"
@@ -23,7 +23,8 @@ RC=$?
 
 case "$RC" in
     0)
-        echo "[PASS] Parity verified: 0.00000% drift against IBM z/OS golden records."
+        echo "[PASS] Parity verified: 0.00000% drift against the GnuCOBOL oracle."
+        printf '%s\n' "$OUTPUT" | head -1
         exit 0
         ;;
     2)

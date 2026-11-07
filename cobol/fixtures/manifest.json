@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-11-07T21:34:17Z",
+  "compiler": "cobc (GnuCOBOL) 3.1.2.0",
+  "runner": "docker mainframe-ghost/gnucobol:3.1.2 --network none",
+  "compile": [
+    "cobc -x -fsign=EBCDIC -I copybooks cobol/src/intaccr_batch.cbl",
+    "cobc -x cobol/src/ebcsort.cbl"
+  ],
+  "program_log": "INTACCR RECORDS PROCESSED: 000010000",
+  "seed": 1959,
+  "records": 10000,
+  "record_length": 25,
+  "sha256": {
+    "ACCTIN": "cd3e8674a8e879d88a3f20b8bf84b820e98b298942af8323221b459841dae6f8",
+    "ACCTOUT": "b18d1e5eb3a5164c0f2280a5e62c3fbd220ae7df503fd744700b78967539068a",
+    "KEYSOUT": "3b32ac1f48367155e95638eace9f13b57b3a6de4ae8f34060b28114ef8e75458"
+  },
+  "sources_sha256": {
+    "cobol/src/intaccr_batch.cbl": "ed360a3a665f9e525764e8fb89c956d18153043216a1f15f65b19bf80df1963c",
+    "cobol/src/ebcsort.cbl": "d4270080caa39f0d1a2a5253ca28620daf690d8d1872bf9133ddd4b8e264fdc9",
+    "copybooks/INTACCR.cpy": "9bb5da960b449e23e27c5e838cb8f82c75de1c82cf4b2176231bf07e8c16b212"
+  }
+}

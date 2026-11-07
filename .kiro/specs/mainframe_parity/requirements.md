@@ -54,6 +54,27 @@ Source of truth: `specs/PRD.md` (Sections 4, 5.1, 8). All requirements use EARS 
 6. AC-004.6: *When* drift is exactly `0.00000%` and no S0C7 occurs, the Sentinel *shall* exit with code 0.
 7. AC-004.7: *If* the Sentinel itself fails (parse or runtime error), *then* it *shall* exit with code 1.
 
+## REQ-MF-006: COBOL Ground Truth
+
+**Statement:** *When* parity is measured, the system *shall* compare against bytes produced by a real COBOL compiler running the original program, not only against a second Python implementation.
+
+**Acceptance Criteria**
+1. AC-006.1: `cobol/src/intaccr_batch.cbl` *shall* `COPY INTACCR` and compute `WS-INTEREST` and `WS-NEW-BALANCE` exactly as the copybook declares them, with no `ROUNDED` phrase.
+2. AC-006.2: GnuCOBOL output for the seeded 10,000-record corpus *shall* be committed in `cobol/fixtures/` with SHA-256 digests in `manifest.json`.
+3. AC-006.3: *If* a fixture does not match its digest, *then* the Sentinel *shall* treat it as drift (exit 2).
+4. AC-006.4: The golden and modern engines *shall* match the COBOL `COMP-3`, zoned and `SORT` output byte for byte.
+
+## REQ-MF-007: Execute the Proposed Code
+
+**Statement:** *When* a tool call proposes a `.py` file that exposes `accrue_monthly_interest`, the Sentinel *shall* execute the post-write file in a sandbox and compare its result for every oracle record.
+
+**Acceptance Criteria**
+1. AC-007.1: The Sentinel *shall* rebuild the post-write file for `fs_write`, `fs_append` and `str_replace` payloads.
+2. AC-007.2: The candidate *shall* run in a child process started with `python -I -B`, an empty environment, CPU / memory / file-size limits, a 30 s timeout and, where supported, no network namespace.
+3. AC-007.3: *If* any record differs from GnuCOBOL in value or scale, *then* the Sentinel *shall* exit with code 2 and list example records on STDERR.
+4. AC-007.4: *If* the candidate accepts a `float` argument instead of raising `TypeError`, *then* the Sentinel *shall* exit with code 2.
+5. AC-007.5: *If* the candidate crashes, hangs or exceeds a limit, *then* the Sentinel *shall* exit with code 2.
+
 ## REQ-MF-005 (Supporting): Memory Layout Fidelity
 
 Derived from PRD Failure Modes 4 and 5.
@@ -71,3 +92,5 @@ Derived from PRD Failure Modes 4 and 5.
 | REQ-MF-003 | 2 | A, D, E | `engine/comp3_packer.py` |
 | REQ-MF-004 | all | E | `.kiro/hooks/`, `engine/shadow_fuzzer.py` |
 | REQ-MF-005 | 4, 5 | n/a | `engine/copybook_parser.py` |
+| REQ-MF-006 | 1, 2, 3 | A-D | `cobol/`, `engine/cobol_oracle.py` |
+| REQ-MF-007 | 1 | n/a | `engine/shadow_fuzzer.py`, `engine/candidate_runner.py` |

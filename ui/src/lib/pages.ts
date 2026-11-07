@@ -1,6 +1,7 @@
-// 3270 panels. Every value shown comes from parity_vectors.json (engine output).
-import { CAPTURED_VETO, DATA, SCENARIOS, telemetry, type Comp3Vector, type LayoutRow, type Scenario } from '../data/vectors';
-import type { RunState } from './run';
+// 3270 panels. Every value shown comes from the engine: parity_vectors.json (exported)
+// or a live cockpit API response.
+import { CANDIDATES, DATA, ORACLE, candidateById, type Comp3Vector, type LayoutRow } from '../data/vectors';
+import type { LabResult, RunState } from './run';
 import {
   BODY_ROWS,
   COLS,
@@ -20,29 +21,48 @@ import {
   type Seg,
 } from './screen';
 
-export type PageId = 'ast' | 'hex' | 'vec' | 's0c7' | 'fuzz';
+export type PageId = 'ast' | 'hex' | 'vec' | 's0c7' | 'fuzz' | 'lab';
 
 export const PAGES: { id: PageId; key: string; label: string; title: string }[] = [
   { id: 'ast', key: 'F1', label: 'AST', title: 'COPYBOOK AST / BYTE LAYOUT' },
   { id: 'hex', key: 'F2', label: 'HEXDUMP', title: 'EBCDIC / COMP-3 HEX DUMP' },
   { id: 'vec', key: 'F3', label: 'VECTORS', title: 'GOLDEN TEST VECTORS A-D' },
   { id: 's0c7', key: 'F4', label: 'S0C7', title: 'S0C7 DATA EXCEPTION MONITOR' },
-  { id: 'fuzz', key: 'F5', label: 'FUZZER', title: 'DUAL-ENGINE SHADOW FUZZER' },
+  { id: 'fuzz', key: 'F5', label: 'SENTINEL', title: 'PreToolUse PARITY SENTINEL' },
+  { id: 'lab', key: 'F6', label: 'LAB', title: 'LIVE ENGINE LAB' },
 ];
 
-const book = DATA.copybook;
+export interface LayoutView {
+  name: string;
+  recordSize: number;
+  layout: LayoutRow[];
+  custom: boolean;
+}
+
+export const DEFAULT_LAYOUT: LayoutView = {
+  name: DATA.copybook.name,
+  recordSize: DATA.copybook.record_size,
+  layout: DATA.copybook.layout,
+  custom: false,
+};
+
 const fmt = (value: number) => value.toLocaleString('en-US');
-const isOverlay = (f: LayoutRow) =>
-  book.layout.some((g) => g.redefines && f.path.startsWith(`${g.path}.`));
 
 // ------------------------------------------------------------------------- PF1 AST
 
-function astPage(): Row[] {
+function astPage(view: LayoutView): Row[] {
+  const book = view.layout;
+  const isOverlay = (f: LayoutRow) => book.some((g) => g.redefines && f.path.startsWith(`${g.path}.`));
+  const root = book[0];
   const rows: Row[] = [
-    row(h(` ${book.name}   01 ${book.layout[0].name}   RECORD LENGTH ${book.record_size} BYTES`)),
+    row(
+      h(` ${view.name}   01 ${root?.name ?? '?'}   RECORD LENGTH ${view.recordSize} BYTES`),
+      view.custom ? d('   (PARSED LIVE)') : n(''),
+    ),
     row(d(' LVL  NAME              PIC        USAGE     OFFSET  LEN  NOTES')),
   ];
-  for (const f of book.layout) {
+  const listed = book.slice(0, BODY_ROWS - 5);
+  for (const f of listed) {
     const indent = f.level === 1 ? '' : f.level <= 5 ? ' ' : '  ';
     const lvl = pad(`${indent}${String(f.level).padStart(2, '0')}`, 5);
     let note: Seg = n('');
@@ -59,10 +79,11 @@ function astPage(): Row[] {
       ),
     );
   }
-  const elementary = book.layout.filter((f) => f.pic && !isOverlay(f));
+  if (book.length > listed.length) rows.push(row(d(` ... ${book.length - listed.length} MORE FIELDS`)));
+  const elementary = book.filter((f) => f.pic && !f.redefines && !isOverlay(f) && f.level !== 1);
   const fieldSum = elementary.reduce((sum, f) => sum + f.size, 0);
-  const slack = book.layout.reduce((sum, f) => sum + f.slack_before, 0);
-  const firstSync = book.layout.find((f) => f.slack_before);
+  const slack = book.reduce((sum, f) => sum + f.slack_before, 0);
+  const firstSync = book.find((f) => f.slack_before);
   rows.push(blank());
   rows.push(
     row(
@@ -71,7 +92,7 @@ function astPage(): Row[] {
       n('   + SYNC SLACK '),
       h(String(slack)),
       n('   = COMPILER RECORD LENGTH '),
-      h(String(book.record_size)),
+      h(String(view.recordSize)),
     ),
   );
   if (firstSync) {
@@ -90,10 +111,11 @@ function astPage(): Row[] {
 // ------------------------------------------------------------------------- PF2 HEX
 
 function hexPage(): Row[] {
+  const book = DATA.copybook;
   const { bytes, chars, owners, fields } = book.sample;
   const packed = new Set(book.layout.filter((f) => f.usage === 'COMP-3').map((f) => f.name));
   const rows: Row[] = [
-    row(d(' OFFSET  00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F   EBCDIC CP-037')),
+    row(d(` ${book.name} SAMPLE RECORD   OFFSET 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F`)),
   ];
   for (let base = 0; base < bytes.length; base += 16) {
     const segs: Seg[] = [n(` +${base.toString(16).toUpperCase().padStart(4, '0')}   `)];
@@ -130,10 +152,10 @@ function hexPage(): Row[] {
 
 const ok = (pass: boolean): Seg => (pass ? h('PASS') : R(' FAIL '));
 
-function nibbleSegs(v: Comp3Vector): Seg[] {
-  return v.nibbles.flatMap((nib, i) => {
-    const last = i === v.nibbles.length - 1;
-    const padNibble = i === 0 && v.digits % 2 === 0;
+function nibbleSegs(nibs: string[], digits: number): Seg[] {
+  return nibs.flatMap((nib, i) => {
+    const last = i === nibs.length - 1;
+    const padNibble = i === 0 && digits % 2 === 0;
     return [last ? I(nib) : padNibble ? h(nib) : n(nib), n(' ')];
   });
 }
@@ -141,11 +163,12 @@ function nibbleSegs(v: Comp3Vector): Seg[] {
 function vectorPage(): Row[] {
   const { A, B, C, D } = DATA.vectors;
   const rows: Row[] = [row(h(' GOLDEN TEST VECTORS  specs/PRD.md SECTION 8  (COMPUTED BY engine/)')), blank()];
+  const vec = (v: Comp3Vector) => nibbleSegs(v.nibbles, v.digits);
 
   rows.push(
     row(n(` A  PIC ${pad(A.pic, 17)}${lpad(A.input, 12)} -> `), h(A.hex), n(`   LEN ${A.byte_length}  SIGN ${A.sign_nibble}`)),
   );
-  rows.push(row(d('    NIBBLES '), ...nibbleSegs(A), d(`   DECODED ${A.decoded}  `), ok(A.decoded === A.input)));
+  rows.push(row(d('    NIBBLES '), ...vec(A), d(`   DECODED ${A.decoded}  `), ok(A.decoded === A.input)));
   rows.push(blank());
 
   B.forEach((v, i) => {
@@ -177,7 +200,7 @@ function vectorPage(): Row[] {
         n(`${lpad(sign, 7)} -> `),
         h(v.hex),
         d('  NIBBLES '),
-        ...nibbleSegs(v),
+        ...vec(v),
         n(` LEN ${v.byte_length} `),
         ok(v.decoded === v.input && v.nibbles[0] === '0'),
       ),
@@ -194,16 +217,16 @@ function s0c7Page(): Row[] {
   const E = DATA.vectors.E;
   const bad = E.invalid_nibble_index ?? E.nibbles.length - 1;
   const lead = '  NIBBLES      ';
-  const hard = SCENARIOS.hardened.report;
+  const hard = candidateById('hardened')?.report;
   const rows: Row[] = [
     row(R(' S0C7 '), r(` DATA EXCEPTION   TEST VECTOR E   PIC ${E.pic}`)),
     blank(),
     row(n('  INPUT DUMP   '), h(E.hex.match(/../g)?.join(' ') ?? E.hex), d('   UNINITIALISED EBCDIC SPACES MOVED TO PACKED')),
+    row(n(lead), ...E.nibbles.flatMap((nib, i) => [i === bad ? R(nib) : n(nib), n(' ')])),
     row(
-      n(lead),
-      ...E.nibbles.flatMap((nib, i) => [i === bad ? R(nib) : n(nib), n(' ')]),
+      n(' '.repeat(lead.length + bad * 2)),
+      r(`^ ${(E.invalid_nibble_kind ?? 'sign').toUpperCase()} NIBBLE ${E.invalid_nibble ?? E.sign_nibble} INVALID: ONLY C / D / F ARE SIGNS`),
     ),
-    row(n(' '.repeat(lead.length + bad * 2)), r(`^ ${(E.invalid_nibble_kind ?? 'sign').toUpperCase()} NIBBLE ${E.invalid_nibble ?? E.sign_nibble} INVALID: ONLY C / D / F ARE SIGNS`)),
     blank(),
     row(r(' CEE3207S The system detected a data exception (System Completion Code=0C7).')),
     row(r(' IEA995I SYMPTOM DUMP OUTPUT  SYSTEM COMPLETION CODE=0C7  REASON CODE=00000007')),
@@ -234,67 +257,127 @@ function s0c7Page(): Row[] {
   return rows;
 }
 
-// ------------------------------------------------------------------------- PF5 FUZZER
+// ------------------------------------------------------------------------- PF5 SENTINEL
 
-function bar(done: number, total: number, width: number): string {
-  const filled = total ? Math.floor((done * width) / total) : 0;
+function bar(done: number, width: number): string {
+  const filled = Math.floor(Math.min(1, Math.max(0, done)) * width);
   return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
 }
 
-function fuzzPage(run: RunState): Row[] {
-  const s: Scenario = SCENARIOS[run.scenario];
-  const t = telemetry(s);
-  if (run.phase === 'idle') {
-    return [
-      row(h(' SHADOW FUZZER READY')),
-      blank(),
-      row(n(`  GOLDEN ENGINE  INTEGER / NIBBLE ARITHMETIC     RECORDS ${fmt(DATA.records)}`)),
-      row(n(`  MODERN ENGINE  DECIMAL PREC=28 ROUND_DOWN      SEED    ${DATA.seed}`)),
-      blank(),
-      row(d('  ENTER  '), h('DEPLOY H'), d('  TO PROMOTE services/hardened_service.py')),
-      row(d('  ENTER  '), h('DEPLOY V'), d('  TO PROMOTE services/vulnerable_service.py')),
-      blank(),
-      row(d('  EACH DEPLOY_LAMBDA CALL IS INTERCEPTED BY THE KIRO PreToolUse HOOK.')),
-    ];
-  }
-  if (run.phase !== 'verdict') {
-    const phaseLabel = { transpile: 'BEDROCK TRANSPILE', hook: 'PreToolUse HOOK FIRED', fuzz: 'FUZZING' }[run.phase];
-    return [
-      row(h(` ${phaseLabel}`), n(`   ${s.service}`)),
-      blank(),
-      row(n('  RECORDS  '), h(bar(run.records, t.records, 40)), n(` ${lpad(fmt(run.records), 6)} / ${fmt(t.records)}`)),
-      row(n('  S0C7 BAT '), h(bar(run.battery, t.battery, 40)), n(` ${lpad(fmt(run.battery), 6)} / ${fmt(t.battery)}`)),
-      blank(),
-      row(d('  GOLDEN: cents = balance * rate // (12 * 10^4), truncated toward zero')),
-      row(d('  MODERN: Decimal  Context(prec=28, rounding=ROUND_DOWN).quantize(0.01)')),
-    ];
-  }
-  if (s.screen) return s.screen.slice(2, 2 + BODY_ROWS).map((line) => toneLine(line));
-  // Captured veto transcript (the service file was never written).
+const DEPLOY_KEYS: Record<string, string> = { hardened: 'H', float: 'V', floor: 'FLOOR', halfup: 'U' };
+
+function sentinelIdle(): Row[] {
   const rows: Row[] = [
-    row(R(' VETO '), r(` PreToolUse ${s.hook.tool_name} ${s.hook.target}  EXIT ${s.hook.exit_code}`)),
+    row(h(' SENTINEL ARMED'), d('   PreToolUse -> engine/shadow_fuzzer.py --verify-stdin')),
+    blank(),
+    row(n('  ORACLE   '), h(ORACLE.compiler), n(`  ${fmt(ORACLE.records)} RECS  ${ORACLE.program.replace('cobol/src/', '')}`)),
+    ...ORACLE.procedure.slice(0, 2).map((line) => row(d(`           ${line}`))),
+    row(n('  SANDBOX  '), d('python -I -B, empty env, rlimits CPU/MEM/FSIZE, unshare --net')),
+    blank(),
+    row(d('  KEY       BALANCE         RATE    COBOL WS-INTEREST COMP-3    VALUE')),
   ];
-  const violations = s.hook.stderr.filter((l) => l.includes('Float precision violation on '));
-  for (const line of s.hook.stderr.filter((l) => l.startsWith('[FAIL]'))) {
-    for (const part of wrap(line)) rows.push(row(r(` ${part}`)));
-  }
-  rows.push(row(r(` FLOAT PRECISION VIOLATIONS (${violations.length}):`)));
-  for (const line of violations) rows.push(row(r(`   ${line.trim().replace('Float precision violation on ', '')}`)));
-  for (const line of s.hook.stderr.filter((l) => l.startsWith('[VETO]'))) {
-    for (const part of wrap(line)) rows.push(row(r(` ${part}`)));
+  for (const s of ORACLE.sample.slice(0, 4)) {
+    rows.push(row(n(`  ${pad(s.key, 9)}${lpad(s.balance, 15)}  ${pad(s.rate, 7)} `), h(pad(s.interest_hex, 26)), n(lpad(s.interest, 12))));
   }
   rows.push(blank());
-  rows.push(row(d(' BLOCKED SOURCE:')));
-  for (const line of CAPTURED_VETO.source_excerpt) rows.push(row(d(`   ${line}`)));
+  for (const c of CANDIDATES.slice(0, 5)) {
+    const key = DEPLOY_KEYS[c.id];
+    rows.push(row(d('  ENTER '), h(pad(key ? `DEPLOY ${key}` : 'PANEL', 14)), n(pad(c.file, 44)), d(`EXIT ${c.hook.exit_code}`)));
+  }
   return rows;
 }
 
+function sentinelPage(run: RunState): Row[] {
+  if (run.phase === 'idle') return sentinelIdle();
+  if (run.phase !== 'verdict' || !run.verdict) {
+    const scanDone = run.phase === 'exec' ? 1 : 0.5;
+    return [
+      row(h(run.phase === 'scan' ? ' PreToolUse HOOK FIRED' : ' SANDBOXED EXECUTION'), n(`   ${run.label}`)),
+      blank(),
+      row(n('  1 STATIC IEEE 754 SCAN     '), h(bar(scanDone, 36))),
+      row(n('  2 RUN CANDIDATE vs COBOL   '), h(bar(run.progress, 36)), n(` ${lpad(fmt(Math.floor(run.progress * ORACLE.records)), 6)}`)),
+      blank(),
+      row(d('  COBOL : COMPUTE WS-INTEREST = (ACCT-BALANCE * ACCT-ANNUAL-RATE) / 12')),
+      row(d('          no ROUNDED phrase, so the quotient truncates toward zero')),
+      row(d(`  CHILD : python -I -B candidate_runner.py, ${ORACLE.records.toLocaleString('en-US')} cases + float probe`)),
+      blank(),
+      run.error ? row(R(' ERROR '), r(` ${run.error}`)) : blank(),
+    ];
+  }
+  return run.verdict.screen.slice(2, 2 + BODY_ROWS).map((line) => toneLine(line));
+}
+
 function toneLine(line: string): Row {
-  if (/VETOED|EXIT CODE 2|precision violation|^\s+(candidate )?drift |S0C7 disagreement|unexpected S0C7/.test(line))
+  if (/VETOED|EXIT CODE 2|precision violation|candidate drift|differ from|IEEE 754 input|died|timed out|Error|S0C7 disagreement|unexpected S0C7|oracle:/.test(line))
     return row(r(line));
   if (/ZERO DRIFT|PARITY VERIFIED/.test(line)) return row(h(line));
   if (/PACKED DECIMAL/.test(line)) return row(d(line));
   return row(n(line));
+}
+
+// ------------------------------------------------------------------------- PF6 LAB
+
+function labHelp(): Row[] {
+  return [
+    row(h(' LIVE ENGINE LAB'), d('   EVERY RESULT IS COMPUTED BY engine/ VIA cockpit/server.py')),
+    blank(),
+    row(n('  UNPACK <hex> <pic>     '), d('UNPACK 40404040 S9(5)V99      UNPACK 123456789D S9(7)V99')),
+    row(n('  PACK <value> <pic>     '), d('PACK -1234567.89 S9(7)V99     PACK 123456 S9(6)')),
+    row(n('  ZONED <text> <pic>     '), d('ZONED 1234N S9(5)             ZONED 1234{ S9(3)V99')),
+    row(n('  SORT <key> <key> ...   '), d('SORT 100ACC ACC100 acc100')),
+    blank(),
+    row(d('  COPYBOOKS: PASTE ONE IN THE SENTINEL PANEL (COPYBOOK TAB), RESULT ON PF1.')),
+    row(d('  CANDIDATES: EDIT THE SOURCE IN THE SENTINEL PANEL AND RUN THE HOOK.')),
+  ];
+}
+
+function labPage(lab: LabResult | null): Row[] {
+  if (!lab) return labHelp();
+  if (lab.kind === 'busy') return [row(h(` ${lab.command}`)), blank(), row(d('  CALLING ENGINE...'))];
+  if (lab.kind === 'error') {
+    return [row(h(` ${lab.command}`)), blank(), ...wrap(lab.error, COLS - 4).map((l) => row(r(`  ${l}`))), blank(), ...labHelp().slice(2)];
+  }
+  if (lab.kind === 'comp3') {
+    const v = lab.data;
+    const bad = v.invalid_nibble_index;
+    const rows: Row[] = [
+      row(h(` ${lab.title}`), n(`   PIC ${v.pic}`)),
+      blank(),
+      row(n('  BYTES    '), h(v.hex.match(/../g)?.join(' ') ?? v.hex), n(`   LENGTH ${v.byte_length}`)),
+      row(n('  NIBBLES  '), ...v.nibbles.flatMap((nib, i) => [i === bad ? R(nib) : i === v.nibbles.length - 1 ? I(nib) : n(nib), n(' ')])),
+      row(n('  SIGN     '), n(`${v.sign_nibble ?? '?'} ${(v.sign_class ?? '').toUpperCase()}`)),
+      blank(),
+    ];
+    if (v.valid) rows.push(row(n('  VALUE    '), h(v.value ?? '')), blank(), row(h('  VALID PACKED DECIMAL')));
+    else if (v.s0c7) {
+      rows.push(row(R(' ABEND S0C7 '), r(` ${v.error ?? ''}`)));
+      rows.push(row(r(' CEE3207S The system detected a data exception (System Completion Code=0C7).')));
+    } else rows.push(row(R(' LAYOUT ERROR '), r(` ${v.error ?? ''}`)));
+    return rows;
+  }
+  if (lab.kind === 'zoned') {
+    const z = lab.data;
+    return [
+      row(h(` ZONED DECIMAL  '${z.text}'`), n(`   PIC ${z.pic}`)),
+      blank(),
+      row(n('  EBCDIC   '), h(z.ebcdic_hex ?? 'n/a')),
+      z.valid ? row(n('  VALUE    '), h(z.value ?? '')) : row(R(' ABEND S0C7 '), r(` ${z.error ?? ''}`)),
+      blank(),
+      row(d('  OVERPUNCH  { A-I = +0..+9    } J-R = -0..-9   (LAST BYTE ZONE C / D)')),
+    ];
+  }
+  const s = lab.data;
+  const tag = (keys: string[], code: 'ascii' | 'ebcdic') => keys.map((k) => `${k}(${s.first_bytes[k][code]})`);
+  return [
+    row(h(' COLLATING SEQUENCE'), n(`   ${s.ascii.length} KEYS`)),
+    blank(),
+    row(d('  ASCII  ')),
+    ...wrap(tag(s.ascii, 'ascii').join(' '), COLS - 6).map((l) => row(r(`    ${l}`))),
+    row(d('  EBCDIC CP-037 (MAINFRAME SORT)')),
+    ...wrap(tag(s.ebcdic, 'ebcdic').join(' '), COLS - 6).map((l) => row(h(`    ${l}`))),
+    blank(),
+    s.ascii.join() === s.ebcdic.join() ? row(h('  SAME ORDER')) : row(R(' ORDER DIFFERS '), r('  A NATIVE str SORT WOULD REORDER THE BATCH')),
+  ];
 }
 
 // ------------------------------------------------------------------------- frame
@@ -305,16 +388,19 @@ export interface FrameInput {
   command: string;
   message: { text: string; error: boolean } | null;
   abend: boolean;
+  layout: LayoutView;
+  lab: LabResult | null;
 }
 
-export function buildScreen({ page, run, command, message, abend }: FrameInput): Row[] {
+export function buildScreen({ page, run, command, message, abend, layout, lab }: FrameInput): Row[] {
   const meta = PAGES.find((p) => p.id === page)!;
   const body = {
-    ast: astPage,
+    ast: () => astPage(layout),
     hex: hexPage,
     vec: vectorPage,
     s0c7: s0c7Page,
-    fuzz: () => fuzzPage(run),
+    fuzz: () => sentinelPage(run),
+    lab: () => labPage(lab),
   }[page]();
   const rows = fit(body);
   if (message) rows[BODY_ROWS - 1] = row(message.error ? R(` ${message.text} `) : h(` ${message.text}`));
@@ -324,9 +410,9 @@ export function buildScreen({ page, run, command, message, abend }: FrameInput):
   const legend: Seg[] = [];
   for (const p of PAGES) {
     const label = `${p.key.replace('F', 'PF')}=${p.label}`;
-    legend.push(p.id === page ? I(label) : d(label), d('  '));
+    legend.push(p.id === page ? I(label) : d(label), d(' '));
   }
-  legend.push(d('PF9=PHOSPHOR'));
+  legend.push(d('PF9=PHOS'));
 
   const oia = abend
     ? row(R(' X SYSTEM '), r('  PROG 0C7   S0C7 DATA EXCEPTION   [z/OS V2.5]   LPAR: PROD01'))

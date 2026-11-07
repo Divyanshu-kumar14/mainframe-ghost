@@ -1,24 +1,47 @@
-import type { ScenarioId } from '../data/vectors';
+import type { FuzzReport } from '../data/vectors';
+import type { Comp3Description } from '../data/vectors';
+import type { SortResult, ZonedResult } from './api';
 
-export type Phase = 'idle' | 'transpile' | 'hook' | 'fuzz' | 'verdict';
+export type Phase = 'idle' | 'scan' | 'exec' | 'verdict';
+
+/** Where a verdict came from. Shown verbatim in the UI so nothing is passed off as live. */
+export type Source = 'live' | 'preset';
+
+export interface Verdict {
+  exitCode: number;
+  report: FuzzReport;
+  screen: string[];
+  /** Hook transcript: real hook script output (preset) or verify_stdin summary (live). */
+  stdout: string[];
+  stderr: string[];
+  target: string;
+  source: Source;
+}
 
 export interface RunState {
   phase: Phase;
-  scenario: ScenarioId;
-  /** Records verified so far in the replayed fuzzer run (0..records). */
-  records: number;
-  /** Corrupted COMP-3 dumps checked so far (0..battery). */
-  battery: number;
-  /** Exit code once the hook verdict is in. */
-  exitCode: number | null;
+  candidateId: string;
+  label: string;
+  /** 0..1 animation progress for the exec phase. */
+  progress: number;
+  verdict: Verdict | null;
+  error: string | null;
 }
 
 export const IDLE: RunState = {
   phase: 'idle',
-  scenario: 'hardened',
-  records: 0,
-  battery: 0,
-  exitCode: null,
+  candidateId: 'hardened',
+  label: '',
+  progress: 0,
+  verdict: null,
+  error: null,
 };
 
-export const PHASE_MS = { transpile: 900, hook: 700, fuzz: 2600 } as const;
+export const PHASE_MS = { scan: 650, exec: 2200 } as const;
+
+export type LabResult =
+  | { kind: 'comp3'; title: string; data: Comp3Description }
+  | { kind: 'zoned'; data: ZonedResult }
+  | { kind: 'sort'; data: SortResult }
+  | { kind: 'error'; command: string; error: string }
+  | { kind: 'busy'; command: string };

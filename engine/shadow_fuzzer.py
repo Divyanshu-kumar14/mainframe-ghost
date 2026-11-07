@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Dual-engine differential shadow fuzzer (the parity sentinel core).
+"""Differential shadow fuzzer (the parity sentinel core).
 
+Ground truth  : GnuCOBOL output of cobol/src/intaccr_batch.cbl and ebcsort.cbl,
+                committed in cobol/fixtures/ (see engine/cobol_oracle.py).
 Golden engine : integer + nibble arithmetic, independent hard-coded EBCDIC ranges.
 Modern engine : decimal.Decimal (prec=28, ROUND_DOWN) + engine.comp3_packer / ebcdic_codec.
+Candidate     : the service code an agent proposes to write. It is executed in a
+                sandboxed child process (engine/candidate_runner.py) and its
+                ``accrue_monthly_interest`` must match COBOL on every record.
 
-For N synthetic banking records both engines compute monthly interest, pack it as
+For N seeded banking records the engines compute monthly interest, pack it as
 COMP-3, overpunch the new balance as zoned decimal, and sort account keys in EBCDIC
 order. Any byte or value difference is drift. A battery of corrupted COMP-3 dumps
 checks that both engines agree on where S0C7 must fire.
 
-Exit codes: 0 parity (0.00000% drift), 2 veto (drift, S0C7, float contamination),
-1 sentinel error. Pass records as ``--verify-stdin`` to read a Kiro PreToolUse
+Exit codes: 0 parity (0.00000% drift), 2 veto (drift, S0C7, float contamination,
+candidate mismatch), 1 sentinel error. ``--verify-stdin`` reads a Kiro PreToolUse
 payload. No float is created anywhere in this module.
 """
 
@@ -22,7 +27,11 @@ import io
 import json
 import os
 import random
+import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import tokenize
 import traceback
 from dataclasses import dataclass, field
@@ -241,6 +250,14 @@ class ParityReport:
     abend_mismatches: int = 0
     s0c7_injected_detected: int = 0
     candidate_drift: int = 0
+    candidate_records: int = 0
+    candidate_source: str = ""
+    candidate_errors: list[str] = field(default_factory=list)
+    candidate_ledger_delta: Decimal = Decimal(0)   # net: sum(candidate - COBOL)
+    candidate_misposted: Decimal = Decimal(0)      # gross: sum(|candidate - COBOL|)
+    sandbox: str = ""
+    oracle: str = ""
+    oracle_mismatches: int = 0
     seed: int = DEFAULT_SEED
     violations: list[Violation] = field(default_factory=list)
     packed_dump_abends: list[str] = field(default_factory=list)
@@ -255,9 +272,18 @@ class ParityReport:
         return f"{pct}%"
 
     @property
+    def candidate_drift_pct(self) -> str:
+        if self.candidate_records == 0:
+            return "n/a"
+        pct = (Decimal(self.candidate_drift) * 100 / Decimal(self.candidate_records)).quantize(
+            Decimal("0.00001"), rounding=ROUND_DOWN)
+        return f"{pct}%"
+
+    @property
     def passed(self) -> bool:
         return (self.drifted == 0 and self.s0c7_unexpected == 0 and not self.violations
-                and not self.packed_dump_abends)
+                and not self.packed_dump_abends and not self.candidate_errors
+                and self.candidate_drift == 0 and self.oracle_mismatches == 0)
 
     def summary(self) -> str:
         status = "PASS" if self.passed else "FAIL"
@@ -265,7 +291,11 @@ class ParityReport:
                 f"drifted={self.drifted} sort_mismatches={self.sort_mismatches} "
                 f"s0c7_unexpected={self.s0c7_unexpected} abend_mismatches={self.abend_mismatches} "
                 f"s0c7_injected_detected={self.s0c7_injected_detected} "
-                f"violations={len(self.violations)}")
+                f"violations={len(self.violations)} oracle_mismatches={self.oracle_mismatches} "
+                f"candidate_records={self.candidate_records} "
+                f"candidate_drift={self.candidate_drift} "
+                f"candidate_drift_pct={self.candidate_drift_pct} "
+                f"candidate_ledger_delta={self.candidate_ledger_delta}")
 
     def as_dict(self) -> dict:
         return {
@@ -275,6 +305,15 @@ class ParityReport:
             "abend_mismatches": self.abend_mismatches,
             "s0c7_injected_detected": self.s0c7_injected_detected,
             "candidate_drift": self.candidate_drift,
+            "candidate_records": self.candidate_records,
+            "candidate_drift_pct": self.candidate_drift_pct,
+            "candidate_ledger_delta": str(self.candidate_ledger_delta),
+            "candidate_misposted": str(self.candidate_misposted),
+            "candidate_source": self.candidate_source,
+            "candidate_errors": self.candidate_errors,
+            "sandbox": self.sandbox,
+            "oracle": self.oracle,
+            "oracle_mismatches": self.oracle_mismatches,
             "violations": [str(v) for v in self.violations],
             "packed_dump_abends": self.packed_dump_abends,
             "examples": self.examples[:10],
@@ -393,11 +432,34 @@ def run_shadow(records: int = DEFAULT_RECORDS, seed: int = DEFAULT_SEED, candida
     if mismatched:
         _note(report, f"EBCDIC sort order differs at {mismatched} positions")
     run_battery(random.Random(seed + 1), battery, report)
+    check_oracle(report)
     return report
 
 
+def check_oracle(report: ParityReport) -> None:
+    """Cross-check both Python engines against the committed GnuCOBOL output."""
+    from engine.cobol_oracle import OracleError, fixtures_present, load_oracle, verify_engines
+
+    if not fixtures_present():
+        report.oracle = "absent (golden engine is the reference)"
+        return
+    try:
+        data = load_oracle()
+    except OracleError as exc:
+        report.oracle_mismatches += 1
+        report.oracle = "tampered"
+        _note(report, f"oracle: {exc}")
+        return
+    report.oracle = f"{data.manifest['compiler']} ({len(data.records)} records)"
+    problems = verify_engines(data)
+    report.oracle_mismatches += len(problems)
+    for problem in problems:
+        _note(report, f"oracle: {problem}")
+
+
 def load_candidate(path: str):
-    """Import a candidate service module (explicit opt-in: executes the file)."""
+    """Import a candidate in-process. Trusted code only (tests, export script);
+    the hook, CLI and MCP server use :func:`execute_candidate` instead."""
     spec = importlib.util.spec_from_file_location("candidate_service", path)
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load {path}")
@@ -407,6 +469,200 @@ def load_candidate(path: str):
     if not callable(func):
         raise AttributeError(f"{path} defines no {CANDIDATE_FUNCTION}(balance, annual_rate)")
     return func
+
+
+# ----------------------------------------------------------------------------- sandbox
+
+RUNNER = Path(__file__).resolve().parent / "candidate_runner.py"
+SANDBOX_TIMEOUT_S = 30
+SANDBOX_CPU_S = 20
+SANDBOX_MEMORY_BYTES = 1 << 30
+SANDBOX_FILE_BYTES = 1 << 20
+_NETNS_PREFIX = ["unshare", "--user", "--net", "--map-root-user"]
+_netns_ok: bool | None = None
+
+
+def netns_available() -> bool:
+    """True when unprivileged user + network namespaces work on this kernel."""
+    global _netns_ok
+    if _netns_ok is None:
+        _netns_ok = False
+        if shutil.which("unshare"):
+            try:
+                probe = subprocess.run([*_NETNS_PREFIX, "true"], capture_output=True,
+                                       timeout=5, check=False)
+                _netns_ok = probe.returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                _netns_ok = False
+    return _netns_ok
+
+
+def _limit_child() -> None:  # runs in the child between fork and exec
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_CPU, (SANDBOX_CPU_S, SANDBOX_CPU_S))
+    resource.setrlimit(resource.RLIMIT_AS, (SANDBOX_MEMORY_BYTES, SANDBOX_MEMORY_BYTES))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (SANDBOX_FILE_BYTES, SANDBOX_FILE_BYTES))
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    os.setsid()
+
+
+@dataclass
+class CandidateRun:
+    loaded: bool = False
+    missing: bool = False
+    error: str | None = None
+    results: list[list[str]] = field(default_factory=list)
+    float_probe: str = "not run"
+    sandbox: str = ""
+
+
+def execute_candidate(source: str, cases: list[tuple[str, str]],
+                      function: str = CANDIDATE_FUNCTION) -> CandidateRun:
+    """Run untrusted candidate source in a separate, limited process.
+
+    The child gets ``python -I -B``, a scrubbed environment (so no AWS or Kiro
+    credentials), a throwaway working directory, rlimits on CPU, memory and file
+    size, a wall-clock timeout and, when available, no network (``unshare --net``).
+    """
+    use_netns = netns_available()
+    sandbox = ("netns+rlimits" if use_netns else "rlimits (no network namespace)") + \
+        f", timeout {SANDBOX_TIMEOUT_S}s"
+    with tempfile.TemporaryDirectory(prefix="mg-candidate-") as tmp:
+        target = Path(tmp) / "candidate_service.py"
+        target.write_text(source, encoding="utf-8")
+        cmd = [sys.executable, "-I", "-B", str(RUNNER), str(target)]
+        if use_netns:
+            cmd = [*_NETNS_PREFIX, *cmd]
+        request = json.dumps({"function": function, "cases": cases})
+        env = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": tmp}
+        try:
+            proc = subprocess.run(cmd, input=request, capture_output=True, text=True,
+                                  cwd=tmp, env=env, timeout=SANDBOX_TIMEOUT_S,
+                                  preexec_fn=_limit_child, check=False)
+        except subprocess.TimeoutExpired:
+            return CandidateRun(error=f"timed out after {SANDBOX_TIMEOUT_S}s", sandbox=sandbox)
+        except OSError as exc:
+            return CandidateRun(error=f"sandbox failed to start: {exc}", sandbox=sandbox)
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        signals = {-9: "killed (CPU or memory limit)", -24: "killed (CPU limit)",
+                   -25: "killed (file size limit)"}
+        reason = signals.get(proc.returncode)
+        if reason is None:
+            tail = (proc.stderr or "").strip().splitlines()[-1:] or [f"exit {proc.returncode}"]
+            reason = tail[0][:200]
+        return CandidateRun(error=f"candidate process died: {reason}", sandbox=sandbox)
+    return CandidateRun(loaded=bool(data.get("loaded")), missing=bool(data.get("missing")),
+                        error=data.get("error"), results=data.get("results") or [],
+                        float_probe=str(data.get("float_probe")), sandbox=sandbox)
+
+
+_DEFINES = re.compile(rf"\b{CANDIDATE_FUNCTION}\b")
+
+
+def mentions_candidate_function(source: str) -> bool:
+    return bool(_DEFINES.search(source))
+
+
+def reference_cases(records: int) -> tuple[list[tuple[str, str]], list[Decimal], str]:
+    """Inputs and expected interest: GnuCOBOL fixtures when present, else golden engine."""
+    from engine.cobol_oracle import OracleError, fixtures_present, load_oracle
+
+    if fixtures_present():
+        try:
+            data = load_oracle()
+            chosen = data.records[:records]
+            return ([(str(r.balance), str(r.annual_rate)) for r in chosen],
+                    [r.interest for r in chosen], data.manifest["compiler"])
+        except OracleError:
+            pass
+    corpus = generate_records(records)
+    cases = [(str(Decimal(r.balance_cents).scaleb(-2)), str(Decimal(r.rate_units).scaleb(-4)))
+             for r in corpus]
+    expected = [Decimal(golden_interest_cents(r.balance_cents, r.rate_units)).scaleb(-2)
+                for r in corpus]
+    return cases, expected, "golden engine"
+
+
+def check_candidate(source: str, report: ParityReport, label: str,
+                    records: int = DEFAULT_RECORDS) -> None:
+    """Execute a proposed service in the sandbox and diff it against COBOL output."""
+    cases, expected, oracle = reference_cases(records)
+    run = execute_candidate(source, cases)
+    report.candidate_source = label
+    report.sandbox = run.sandbox
+    if run.error:
+        report.candidate_errors.append(f"{label}: {run.error}")
+        return
+    if run.missing:  # mentions the name but does not expose it: nothing to execute
+        _note(report, f"{label}: no callable {CANDIDATE_FUNCTION}; static scan only")
+        return
+    if len(run.results) != len(cases):
+        report.candidate_errors.append(f"{label}: returned {len(run.results)} results for "
+                                       f"{len(cases)} records")
+        return
+    report.candidate_records = len(cases)
+    report.comparisons += len(cases)
+    for (balance, rate), want, (kind, text) in zip(cases, expected, run.results):
+        ok = False
+        if kind == "Decimal":
+            got = Decimal(text)
+            ok = got == want and got.as_tuple().exponent == -2
+            delta = FIN_CTX.subtract(got, want)
+            report.candidate_ledger_delta = FIN_CTX.add(report.candidate_ledger_delta, delta)
+            report.candidate_misposted = FIN_CTX.add(report.candidate_misposted,
+                                                     delta.copy_abs())
+        if not ok:
+            report.candidate_drift += 1
+            report.drifted += 1
+            shown = text if kind == "Decimal" else f"{kind} {text}"
+            _note(report, f"candidate drift balance={balance} rate={rate}: "
+                          f"COBOL={want} candidate={shown}")
+    if run.float_probe != "TypeError":
+        report.candidate_errors.append(
+            f"{label}: IEEE 754 input was {run.float_probe}; must raise TypeError")
+    if report.candidate_drift:
+        report.candidate_errors.append(
+            f"{label}: {report.candidate_drift} of {len(cases)} records differ from {oracle}")
+
+
+def proposed_source(payload: dict, root: Path | None = None) -> tuple[str | None, str]:
+    """Full post-write source of the .py file a tool call targets (None if exempt/unknown)."""
+    root = root or Path.cwd()
+    params = payload.get("tool_input") or payload.get("parameters") or {}
+    if not isinstance(params, dict):
+        return None, ""
+    path = next((str(params[k]) for k in _PATH_KEYS if isinstance(params.get(k), str)), "")
+    if not path.endswith(".py"):
+        return None, ""
+    target = Path(path) if Path(path).is_absolute() else root / path
+    try:
+        rel = str(target.resolve().relative_to(root.resolve()))
+    except (ValueError, OSError):
+        rel = path
+    if _is_exempt(rel):
+        return None, rel
+    tool = str(payload.get("tool_name") or payload.get("tool") or "")
+    existing = ""
+    try:
+        if target.is_file() and target.stat().st_size <= MAX_SCAN_BYTES:
+            existing = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        existing = ""
+    text = next((params[k] for k in ("text", "content", "file_text", "fileText")
+                 if isinstance(params.get(k), str)), None)
+    new = next((params[k] for k in ("newStr", "new_str", "new_string")
+                if isinstance(params.get(k), str)), None)
+    old = next((params[k] for k in ("oldStr", "old_str", "old_string")
+                if isinstance(params.get(k), str)), None)
+    if new is not None and old is not None:  # str_replace
+        return (existing.replace(old, new, 1) if old and old in existing else None), rel
+    if text is not None:
+        return (existing + ("" if not existing or existing.endswith("\n") else "\n") + text
+                if "append" in tool else text), rel
+    return (existing or None), rel  # deploy-style call: the file on disk
 
 
 # ----------------------------------------------------------------------------- 3270 screen
@@ -432,27 +688,31 @@ def render_3270(report: ParityReport, color: bool = False) -> str:
     def add(text: str = "", style: str = "g") -> None:
         rows.append((text[:SCREEN_COLUMNS].ljust(SCREEN_COLUMNS), style))
 
-    add("MAINFRAMEGHOST  PARITY SENTINEL  --  DUAL-ENGINE SHADOW FUZZER")
+    add("MAINFRAMEGHOST  PARITY SENTINEL  --  COBOL ORACLE + SHADOW FUZZER")
     add("=" * SCREEN_COLUMNS, "d")
-    add()
-    add(f"  GOLDEN ENGINE   INTEGER / NIBBLE ARITHMETIC     RECORDS . . . : {report.records:>8}")
-    add(f"  MODERN ENGINE   DECIMAL PREC=28 ROUND_DOWN      S0C7 BATTERY  : {report.battery:>8}")
-    add(f"  SEED . . . . .  {report.seed:<10}                      COMPARISONS . : {report.comparisons:>8}")
-    add()
+    add(f"  ORACLE . . . .  {(report.oracle or 'not checked')[:40]:<40} RECORDS : {report.records:>7}")
+    add(f"  GOLDEN ENGINE   INTEGER / NIBBLE ARITHMETIC      S0C7 BAT: {report.battery:>7}")
+    add(f"  MODERN ENGINE   DECIMAL PREC=28 ROUND_DOWN       SEED    : {report.seed:>7}")
+    add(f"  CANDIDATE . . . {(report.candidate_source or 'none')[:40]:<40} COMPARE : {report.comparisons:>7}")
     add(f"  PACKED DECIMAL  {hex_row} | PIC S9(7)V99 COMP-3 | -1234567.89", "d")
     add()
-    add(f"  PARITY DRIFT . . . . . . . . . . . . . . . : {report.drift_pct:>12}")
-    add(f"  DRIFTED COMPARISONS  . . . . . . . . . . . : {report.drifted:>12}")
+    if report.candidate_records:
+        add(f"  CANDIDATE PARITY DRIFT . . . . . . . . . . : {report.candidate_drift_pct:>12}")
+    else:
+        add(f"  ENGINE PARITY DRIFT  . . . . . . . . . . . : {report.drift_pct:>12}")
+    add(f"  ENGINES VS GNUCOBOL MISMATCHES . . . . . . : {report.oracle_mismatches:>12}")
+    add(f"  CANDIDATE VS GNUCOBOL DRIFT  . . . . . . . : "
+        f"{f'{report.candidate_drift}/{report.candidate_records}':>12}")
     add(f"  EBCDIC SORT MISMATCHES . . . . . . . . . . : {report.sort_mismatches:>12}")
     add(f"  S0C7 ON VALID DATA . . . . . . . . . . . . : {report.s0c7_unexpected:>12}")
     add(f"  S0C7 INJECTED / DETECTED . . . . . . . . . : {report.s0c7_injected_detected:>12}")
     add(f"  IEEE 754 VIOLATIONS  . . . . . . . . . . . : {len(report.violations):>12}")
-    add()
     if ok:
         add("  *** ZERO DRIFT -- PARITY VERIFIED -- EXIT CODE 0 ***")
     else:
         add("  *** PARITY DRIFT / S0C7 ABEND -- DEPLOYMENT VETOED -- EXIT CODE 2 ***", "r")
-        details = [str(v) for v in report.violations] + report.packed_dump_abends + report.examples
+        details = ([str(v) for v in report.violations] + report.candidate_errors
+                   + report.packed_dump_abends + report.examples)
         for line in details[:3]:
             add(f"  {line}", "r")
     while len(rows) < SCREEN_ROWS - 2:
@@ -480,6 +740,9 @@ def verify_stdin(raw: str, records: int, seed: int) -> tuple[int, ParityReport]:
     params = payload.get("tool_input") or payload.get("parameters") or {}
     if isinstance(params, dict) and isinstance(params.get("packed_fields"), list):
         check_packed_dumps(params["packed_fields"], report)
+    source, rel = proposed_source(payload)
+    if source and mentions_candidate_function(source):
+        check_candidate(source, report, rel or "<payload>", records)
     return (0 if report.passed else 2), report
 
 
@@ -489,8 +752,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--verify-stdin", action="store_true",
                         help="read a Kiro PreToolUse JSON payload on stdin")
-    parser.add_argument("--candidate", help="python file defining accrue_monthly_interest "
-                        "(executed; explicit opt-in)")
+    parser.add_argument("--candidate", help="python file defining accrue_monthly_interest; "
+                        "statically scanned, then executed in the sandbox")
     parser.add_argument("--scan", action="append", default=[], metavar="FILE",
                         help="statically scan a Python file for float contamination")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
@@ -503,8 +766,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.verify_stdin:
             code, report = verify_stdin(sys.stdin.read(), args.records, args.seed)
         else:
-            candidate = load_candidate(args.candidate) if args.candidate else None
-            report = run_shadow(args.records, args.seed, candidate)
+            report = run_shadow(args.records, args.seed)
+            if args.candidate:
+                source = Path(args.candidate).read_text(encoding="utf-8")
+                report.violations.extend(scan_source(source, args.candidate))
+                check_candidate(source, report, args.candidate, args.records)
             for name in args.scan:
                 report.violations.extend(
                     scan_source(Path(name).read_text(encoding="utf-8"), name))
@@ -520,6 +786,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {violation}")
             for dump in report.packed_dump_abends:
                 print(f"  S0C7 Abend (packed dump) {dump}")
+            for error in report.candidate_errors:
+                print(f"  Candidate veto: {error}")
             for example in report.examples:
                 print(f"  {example}")
         return code

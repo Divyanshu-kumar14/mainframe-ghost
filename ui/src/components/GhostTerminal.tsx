@@ -52,7 +52,7 @@ function GhostTerminalImpl({ rows, page, abend, flashKey, onPage }: Props) {
         </div>
       </div>
 
-      <nav aria-label="Program function keys" className="grid grid-cols-5 gap-2">
+      <nav aria-label="Program function keys" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {PAGES.map((p) => (
           <button
             key={p.id}

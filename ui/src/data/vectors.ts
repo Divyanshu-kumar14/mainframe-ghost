@@ -1,6 +1,5 @@
 // Typed access to the parity data exported by scripts/export_ui_vectors.py.
 // Monetary values stay strings end to end: the UI never parses money into JS numbers.
-import captured from './captured_veto.json';
 import raw from './parity_vectors.json';
 
 export interface LayoutRow {
@@ -59,12 +58,14 @@ export interface Comp3Description {
   valid: boolean;
   s0c7: boolean;
   value?: string;
+  input?: string;
   error?: string;
   invalid_nibble?: string;
   invalid_nibble_index?: number;
   invalid_nibble_kind?: string;
 }
 
+/** engine/shadow_fuzzer.py ParityReport.as_dict() */
 export interface FuzzReport {
   passed: boolean;
   drift_pct: string;
@@ -77,6 +78,15 @@ export interface FuzzReport {
   abend_mismatches: number;
   s0c7_injected_detected: number;
   candidate_drift: number;
+  candidate_records: number;
+  candidate_drift_pct: string;
+  candidate_ledger_delta: string;
+  candidate_misposted: string;
+  candidate_source: string;
+  candidate_errors: string[];
+  sandbox: string;
+  oracle: string;
+  oracle_mismatches: number;
   violations: string[];
   packed_dump_abends: string[];
   examples: string[];
@@ -90,11 +100,18 @@ export interface HookRun {
   stderr: string[];
 }
 
-export interface ServiceRun {
-  service: string;
+export interface Candidate {
+  id: string;
+  title: string;
+  summary: string;
+  file: string;
+  target: string;
+  provenance: string;
+  source: string[];
   report: FuzzReport;
   screen: string[];
   hook: HookRun;
+  meta: Record<string, unknown> | null;
 }
 
 export interface HookConfig {
@@ -110,6 +127,25 @@ export interface HookConfig {
   }[];
 }
 
+export interface OracleInfo {
+  compiler: string;
+  runner: string;
+  compile: string[];
+  records: number;
+  generated_at: string;
+  sha256: Record<string, string>;
+  program: string;
+  procedure: string[];
+  sample: {
+    key: string;
+    balance: string;
+    rate: string;
+    interest_hex: string;
+    interest: string;
+    new_balance_zoned: string;
+  }[];
+}
+
 export interface ParityData {
   generated_at: string;
   seed: number;
@@ -121,6 +157,7 @@ export interface ParityData {
     layout: LayoutRow[];
     sample: { bytes: string[]; chars: string[]; owners: string[]; fields: SampleField[] };
   };
+  oracle: OracleInfo;
   vectors: {
     A: Comp3Vector;
     B: ZonedVector[];
@@ -135,127 +172,63 @@ export interface ParityData {
   };
   s0c7_samples: Comp3Description[];
   hook_config: HookConfig;
-  hardened: ServiceRun;
-  vulnerable: ServiceRun | null;
-}
-
-export interface CapturedVeto extends HookRun {
-  source: string;
-  source_excerpt: string[];
+  candidates: Candidate[];
 }
 
 export const DATA = raw as unknown as ParityData;
-export const CAPTURED_VETO = captured as CapturedVeto;
+export const CANDIDATES: Candidate[] = DATA.candidates;
+export const HOOK = DATA.hook_config.hooks[0];
+export const ORACLE = DATA.oracle;
 
-export type ScenarioId = 'hardened' | 'vulnerable';
-
-export interface Scenario {
-  id: ScenarioId;
-  service: string;
-  title: string;
-  summary: string;
-  hook: HookRun;
-  /** Full fuzzer report when the service was actually run; null for the captured veto. */
-  report: FuzzReport | null;
-  /** IEEE 754 violations found by the hook's scanner. */
-  violations: string[];
-  /** Screen rendered by engine/shadow_fuzzer.py render_3270, when available. */
-  screen: string[] | null;
-  provenance: string;
+export function candidateById(id: string): Candidate | undefined {
+  return CANDIDATES.find((c) => c.id === id);
 }
 
-const VIOLATION = /Float precision violation.*/;
-
-export const SCENARIOS: Record<ScenarioId, Scenario> = {
-  hardened: {
-    id: 'hardened',
-    service: DATA.hardened.service,
-    title: 'HARDENED  decimal.Decimal  ROUND_DOWN',
-    summary: 'Context(prec=28, ROUND_DOWN), parse_float=Decimal, CP-037 sort',
-    hook: DATA.hardened.hook,
-    report: DATA.hardened.report,
-    violations: DATA.hardened.report.violations,
-    screen: DATA.hardened.screen,
-    provenance: `export_ui_vectors.py ran the real hook + ${DATA.records.toLocaleString('en-US')}-record fuzzer`,
-  },
-  vulnerable: DATA.vulnerable
-    ? {
-      id: 'vulnerable',
-      service: DATA.vulnerable.service,
-      title: 'VULNERABLE  IEEE 754 float  round()',
-      summary: 'float(), round() banker\u2019s rounding, ASCII sort',
-      hook: DATA.vulnerable.hook,
-      report: DATA.vulnerable.report,
-      violations: DATA.vulnerable.report.violations,
-      screen: DATA.vulnerable.screen,
-      provenance: 'export_ui_vectors.py ran the real hook + fuzzer on the negative control',
-    }
-    : {
-      id: 'vulnerable',
-      service: CAPTURED_VETO.target,
-      title: 'VULNERABLE  IEEE 754 float  round()',
-      summary: 'float(), round() banker\u2019s rounding, ASCII sort',
-      hook: CAPTURED_VETO,
-      report: null,
-      violations: CAPTURED_VETO.stderr
-        .map((line) => VIOLATION.exec(line)?.[0])
-        .filter((line): line is string => Boolean(line)),
-      screen: null,
-      provenance: 'Captured live: Kiro blocked the fs_write of this file (exit 2)',
-    },
+/** Short command aliases for DEPLOY <x>. */
+export const ALIASES: Record<string, string> = {
+  H: 'hardened',
+  HARDENED: 'hardened',
+  V: 'float',
+  F: 'float',
+  FLOAT: 'float',
+  VULNERABLE: 'float',
+  FLOOR: 'floor',
+  U: 'halfup',
+  HALFUP: 'halfup',
 };
 
 export interface Telemetry {
   records: number;
   battery: number;
-  comparisons: number | null;
+  comparisons: number;
   engineDrift: string;
-  drifted: number;
+  candidateRecords: number;
+  candidateDrift: number;
+  candidateDriftPct: string;
+  misposted: string;
+  netDelta: string;
   sortMismatches: number;
   s0c7Detected: number;
   s0c7Unexpected: number;
   violations: number;
-  /** Candidate service vs golden engine; null when the hook blocked it before execution. */
-  candidateDrift: number | null;
+  oracleMismatches: number;
 }
 
-/** Parse the fuzzer summary line, e.g. "[FAIL] drift=0.00000% records=10000 ...". */
-function parseSummary(lines: string[]): Record<string, string> {
-  const line = lines.find((l) => /^\[(PASS|FAIL)\] drift=/.test(l)) ?? '';
-  return Object.fromEntries([...line.matchAll(/(\w+)=(\S+)/g)].map((m) => [m[1], m[2]]));
-}
-
-export function telemetry(s: Scenario): Telemetry {
-  if (s.report) {
-    const rep = s.report;
-    return {
-      records: rep.records,
-      battery: rep.battery,
-      comparisons: rep.comparisons,
-      engineDrift: rep.drift_pct,
-      drifted: rep.drifted,
-      sortMismatches: rep.sort_mismatches,
-      s0c7Detected: rep.s0c7_injected_detected,
-      s0c7Unexpected: rep.s0c7_unexpected,
-      violations: rep.violations.length,
-      candidateDrift: rep.candidate_drift,
-    };
-  }
-  const kv = parseSummary(s.hook.stderr);
-  const int = (key: string) => Number.parseInt(kv[key] ?? '0', 10);
+export function telemetry(rep: FuzzReport): Telemetry {
   return {
-    records: int('records'),
-    battery: int('battery'),
-    comparisons: null,
-    engineDrift: kv.drift ?? 'n/a',
-    drifted: int('drifted'),
-    sortMismatches: int('sort_mismatches'),
-    s0c7Detected: int('s0c7_injected_detected'),
-    s0c7Unexpected: int('s0c7_unexpected'),
-    violations: int('violations'),
-    candidateDrift: null,
+    records: rep.records,
+    battery: rep.battery,
+    comparisons: rep.comparisons,
+    engineDrift: rep.drift_pct,
+    candidateRecords: rep.candidate_records,
+    candidateDrift: rep.candidate_drift,
+    candidateDriftPct: rep.candidate_drift_pct,
+    misposted: rep.candidate_misposted,
+    netDelta: rep.candidate_ledger_delta,
+    sortMismatches: rep.sort_mismatches,
+    s0c7Detected: rep.s0c7_injected_detected,
+    s0c7Unexpected: rep.s0c7_unexpected,
+    violations: rep.violations.length,
+    oracleMismatches: rep.oracle_mismatches,
   };
 }
-
-export const HOOK = DATA.hook_config.hooks[0];
-export const MODEL_ID = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
