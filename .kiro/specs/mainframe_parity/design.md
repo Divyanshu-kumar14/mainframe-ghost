@@ -1,36 +1,43 @@
 # Design: MainframeGhost Parity Sentinel
 
-Source of truth: `specs/PRD.md`. Implements REQ-MF-001..005.
+Source of truth: `specs/PRD.md`. Implements REQ-MF-001..007.
 
 ## 1. System Topology
 
 ```
- COBOL copybook (.cbl) / EBCDIC dumps
+ cobol/src/intaccr_batch.cbl  (COPY INTACCR)    cobol/src/ebcsort.cbl
+              |                                        |
+              +---- GnuCOBOL 3.1.2 (Docker, --network none), run once ----+
+                                     |
+                                     v
+                     cobol/fixtures/  ACCTIN ACCTOUT KEYSOUT manifest.json (sha256)
+                                     |
+ agent tool call (fs_write / fs_append / str_replace)                      |
+              |                                                            |
+              v                                                            |
+ .kiro/hooks/bin/verify_modernization_parity.sh   (PreToolUse)             |
+              |                                                            |
+              v                                                            v
+ engine/shadow_fuzzer.py --verify-stdin
+   1. static IEEE 754 scan of the proposed file
+   2. golden + modern engines vs COBOL bytes (self-check)
+   3. rebuild post-write file -> engine/candidate_runner.py in a sandbox
+      -> accrue_monthly_interest on 10,000 records vs COBOL WS-INTEREST
               |
-              v
- engine/copybook_parser.py  --> AST + byte layout (offsets, REDEFINES, slack)
-              |
-              +--> engine/comp3_packer.py   (packed decimal codec, S0C7)
-              +--> engine/ebcdic_codec.py   (CP-037 key, zoned overpunch)
-              |
-              v
- engine/shadow_fuzzer.py  : golden engine  vs  modernized engine
-              |             10,000 synthetic banking records
-              v
- .kiro/hooks/bin/verify_modernization_parity.sh   (PreToolUse)
         exit 0 = proceed | exit 2 = VETO | exit 1 = sentinel error
-              ^
-              |
- .kiro/mcp/server.py (FastMCP): inspect_copybook_offsets,
-                                decode_comp3_hex, run_shadow_parity_check
+
+ .kiro/mcp/server.py (FastMCP): inspect_copybook_offsets, decode_comp3_hex,
+                                run_shadow_parity_check (same sandboxed diff)
+ cockpit/server.py: JSON API for the 3270 UI; /api/verify calls verify_stdin()
 ```
 
-Two independent engines are compared:
+Reference order: **GnuCOBOL output is ground truth.** The two Python engines are checked against it on every run:
 
-- **Golden engine**: integer/nibble arithmetic only (digit strings, `int`), no `Decimal` reliance for byte layout. Models IBM truncation semantics.
+- **Golden engine**: integer/nibble arithmetic only (digit strings, `int`), no `Decimal` reliance for byte layout.
 - **Modern engine**: `decimal.Decimal` pipeline with `Context(prec=28, rounding=ROUND_DOWN)`.
+- **Candidate**: the service the agent is about to write. Executed, never trusted.
 
-Drift = records where outputs (bytes or value) differ. Pass requires `drift == 0`.
+Drift = records where outputs (bytes or value) differ. Pass requires zero drift in all three comparisons.
 
 ## 2. COMP-3 (Packed Decimal)
 
@@ -211,16 +218,37 @@ Record length = 8
 2. Each record: `(balance, annual_rate, field layout)` built from integers, so no floats are generated.
 3. Golden engine: integer arithmetic with explicit truncation. Modern engine: `Decimal` + `ROUND_DOWN`.
 4. Compare packed bytes, zoned strings, and values. Report `drift_pct = 100 * drifted / total` formatted to 5 decimals.
-5. Inject negative control (known float-based engine) in tests to prove the comparator detects drift.
-6. Exit codes: `0` pass, `2` drift/S0C7/float contamination, `1` internal error.
+5. Cross-check both engines against `cobol/fixtures/` (`engine/cobol_oracle.py verify_engines`). A fixture whose sha256 does not match the manifest counts as drift.
+6. Negative controls (`services/vulnerable_service.py`, `tests/fixtures/candidates/*.py`) prove the comparator detects drift, including `Decimal` ports with the wrong rounding mode.
+7. Exit codes: `0` pass, `2` drift/S0C7/float contamination/candidate mismatch, `1` internal error.
 
 ## 8. Hook Contract
 
 - Config: `.kiro/hooks/parity_guard.json` (`PreToolUse`, command action, `timeout` as sibling of `action`).
 - Script: `.kiro/hooks/bin/verify_modernization_parity.sh`, runs from the workspace root, reads JSON on STDIN.
 - Semantics: exit 2 blocks the tool and returns STDERR to the agent. Other non-zero codes are non-blocking in Kiro, so drift must always map to exit 2.
-- Bootstrap: while `engine/shadow_fuzzer.py` does not exist, the script warns and exits 0 so scaffolding is not deadlocked.
+- Fail closed: if `engine/shadow_fuzzer.py` is missing, the script exits 2 for every call.
+- Exempt paths (static scan and execution skipped): `tests/`, `.kiro/`, `.git/`, `.venv/`, `specs/`, `test_*`, `conftest*`, `*_test.py`.
 
-## 9. MCP Inspector
+## 9. Candidate Sandbox
 
-`.kiro/mcp/server.py` (FastMCP) exposes `inspect_copybook_offsets`, `decode_comp3_hex`, `run_shadow_parity_check`, delegating to the `engine/` modules.
+`engine/shadow_fuzzer.execute_candidate` writes the proposed source to a temp directory and runs `engine/candidate_runner.py` in a child process:
+
+| Control | Setting |
+| :--- | :--- |
+| Interpreter | `python -I -B` (isolated: no user site, no `PYTHON*` env) |
+| Environment | `PATH`, `LANG`, `HOME=<tmp>` only; no AWS or Kiro credentials |
+| Limits | CPU 20 s, address space 1 GiB, file size 1 MiB, no core dumps, own session |
+| Wall clock | 30 s timeout |
+| Network | `unshare --user --net` when the kernel allows it (reported in the verdict) |
+| Verdict channel | runner writes JSON to a dup'd fd; candidate `print` goes to stderr |
+
+The runner also calls the candidate with a binary float; anything other than `TypeError` is a veto (REQ-MF-001 AC-001.4). This is a hardened subprocess, not a VM.
+
+## 10. MCP Inspector
+
+`.kiro/mcp/server.py` (FastMCP) exposes `inspect_copybook_offsets`, `decode_comp3_hex`, `run_shadow_parity_check`, delegating to the `engine/` modules. `run_shadow_parity_check` uses the same sandbox as the hook.
+
+## 11. Bedrock Transpiler
+
+`services/bedrock_transpiler.py` (program mode) inlines COPY members, attaches the parser layout, and calls Claude Sonnet 5.5 (`us.anthropic.claude-sonnet-5-5`). Adaptive thinking cannot be disabled on that model, so no temperature is sent and output is not deterministic; every response goes through `check_candidate` and is rejected (exit 2) on any drift.

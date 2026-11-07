@@ -6,7 +6,15 @@
 **Bonus Target:** Best Startup Project ($10,000) & 1st Place Grand Prize ($30,000)  
 **Visual Theme:** Track 4: Costume Contest Cross-Eligible (IBM 3270 Green-Phosphor CRT Ghost Terminal)  
 **Author:** Divyanshu Kumar  
-**Status:** Approved Specification  
+**Status:** Approved Specification (original vision; see implementation notes below)  
+
+> **Implementation notes (November 2026).** This PRD is the original plan and is kept unchanged below. The shipped project differs in these places; where they conflict, the README and `.kiro/specs/mainframe_parity/` describe what actually runs.
+> - **Category:** submitted to **Resurrection** only. The track, prize and market figures below were planning notes, not verified claims.
+> - **Ground truth:** GnuCOBOL 3.1.2 output of `cobol/src/intaccr_batch.cbl`, not an IBM System/390 or z/OS run. "1959 z/OS" refers to COBOL's origin; z/OS dates from 2000.
+> - **Hook:** executes the proposed service in a sandbox and diffs it against that COBOL output, in addition to the static float scan. It fails closed. The matcher uses Kiro's real tool IDs (`fs_write|fs_append|str_replace|execute_bash`).
+> - **Model:** Claude Sonnet 5.5 on Bedrock (`us.anthropic.claude-sonnet-5-5`), no temperature parameter. Claude 3.5 Sonnet and Titan are not used.
+> - **Not built:** `.kiro/crew/crew.yaml` (Kiro does not document a repo-level crew file; custom agents live in `.kiro/agents/`), Aurora, ECS, Step Functions, CloudWatch, and a deployed Lambda. `services/hardened_service.py` contains a Lambda handler but nothing is deployed.
+> - **Steering file** is `.kiro/steering/cobol_parity.md` (Markdown with `inclusion: always`), not `.yaml`.
 **Working Directory:** `/home/rtx/Desktop/MainframeGhost`
 
 ---

@@ -4,8 +4,9 @@ Source of truth: `specs/PRD.md` (Sections 4, 5.1, 8). All requirements use EARS 
 
 ## Glossary
 
-- **Golden Record**: Byte-exact output of the IBM System/390 reference semantics (Test Vectors A-E in PRD Section 8).
-- **Parity Drift**: Any difference between the Golden Record and the modernized engine output, measured as `drifted / total` over the fuzz corpus.
+- **Golden Record**: Byte-exact output of the original COBOL program as compiled and run by GnuCOBOL (`cobol/fixtures/`), plus Test Vectors A-E in PRD Section 8.
+- **Candidate**: The Python service a tool call proposes to write.
+- **Parity Drift**: Any difference between the Golden Record and an engine or candidate output, measured as `drifted / total` over the 10,000-record corpus.
 - **S0C7**: Synthetic Decimal Data Exception raised on invalid packed/zoned nibbles.
 - **Sentinel**: The PreToolUse hook `.kiro/hooks/bin/verify_modernization_parity.sh`.
 
