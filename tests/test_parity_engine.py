@@ -1,4 +1,4 @@
-"""Golden Test Vectors A-E (specs/PRD.md Section 8) plus parser, fuzzer and hook tests."""
+"""Golden Test Vectors A-E (.kiro/specs/mainframe_parity/requirements.md) plus parser, fuzzer and hook tests."""
 
 from __future__ import annotations
 
@@ -227,7 +227,7 @@ def test_sync_slack_bytes_and_record_length():
     record = Record(book.record())
     record["ACC-FLAG"] = "X"
     record["ACC-BALANCE"] = 123456
-    assert record.buffer.hex().upper() == "E70000000001E240"   # PRD memory map
+    assert record.buffer.hex().upper() == "E70000000001E240"   # design.md SYNC memory map
     assert record["ACC-BALANCE"] == 123456
 
 

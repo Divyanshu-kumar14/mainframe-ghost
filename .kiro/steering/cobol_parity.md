@@ -4,7 +4,7 @@ inclusion: always
 
 # COBOL Parity Rules (Non-Negotiable)
 
-These rules govern all financial and mainframe-compat code in this repository. Source: `specs/PRD.md` Sections 4 and 5.2.
+These rules govern all financial and mainframe-compat code in this repository. Spec: `.kiro/specs/mainframe_parity/`.
 
 ## Arithmetic
 
@@ -33,5 +33,5 @@ These rules govern all financial and mainframe-compat code in this repository. S
 ## Governance
 
 - Before any deploy or financial-code write, the PreToolUse hook runs `engine/shadow_fuzzer.py`. Exit code 2 is a hard veto: fix the precision or layout issue, do not bypass or edit the hook to pass.
-- Do not weaken golden test vectors (A-E in `specs/PRD.md` Section 8) to make tests pass.
+- Do not weaken golden test vectors (A-E in `.kiro/specs/mainframe_parity/requirements.md`) to make tests pass.
 - Target parity drift is exactly `0.00000%` over 10,000 records.

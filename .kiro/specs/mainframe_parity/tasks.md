@@ -1,6 +1,6 @@
 # Implementation Plan: MainframeGhost Parity Sentinel
 
-Requirements: `requirements.md`. Design: `design.md`. Test vectors: `specs/PRD.md` Section 8.
+Requirements: `requirements.md`. Design: `design.md`. Test vectors: `requirements.md` (Golden Test Vectors).
 
 - [x] 1. Governance scaffolding
   - [x] 1.1 Create `.kiro/steering/cobol_parity.md` with `inclusion: always`
@@ -38,7 +38,7 @@ Requirements: `requirements.md`. Design: `design.md`. Test vectors: `specs/PRD.m
     - _Requirements: REQ-MF-005_
   - [x] 5.4 Record accessor backed by one `bytearray`
     - _Requirements: REQ-MF-005.3_
-  - [x] 5.5 Validate PRD examples
+  - [x] 5.5 Validate layout examples (TRANSACTION-RECORD, ACCOUNT-RECORD)
 
 - [x] 6. `engine/shadow_fuzzer.py`
   - [x] 6.1 Golden (integer) engine and modern (`Decimal`, `ROUND_DOWN`) engine
@@ -48,7 +48,7 @@ Requirements: `requirements.md`. Design: `design.md`. Test vectors: `specs/PRD.m
     - _Requirements: AC-004.4_
   - [x] 6.5 CLI: `--verify-stdin`, `--records N`, `--seed`; exit 0/2/1
 
-- [x] 7. `tests/test_parity_engine.py` (PRD Section 8, vectors A-E, parser, negative control)
+- [x] 7. `tests/test_parity_engine.py` (golden vectors A-E, parser, negative control)
 
 - [x] 8. Hook and MCP verification
   - [x] 8.1 Hook exit 0 on a clean payload, 2 on float contamination

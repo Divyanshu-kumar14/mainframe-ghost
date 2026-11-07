@@ -5,7 +5,7 @@ Writes ``ui/src/data/parity_vectors.json``. Everything in it is computed here by
 the actual engine, the GnuCOBOL fixtures and the PreToolUse hook script; nothing
 is hand-typed:
 
-* Golden Test Vectors A-E (specs/PRD.md Section 8)
+* Golden Test Vectors A-E (.kiro/specs/mainframe_parity/requirements.md)
 * copybooks/INTACCR.cpy AST, byte layout and a populated 52-byte record dump
 * the GnuCOBOL oracle manifest and the COBOL program text
 * for every candidate service: the real hook's exit code and transcript for a

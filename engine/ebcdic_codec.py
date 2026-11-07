@@ -1,8 +1,8 @@
 """IBM EBCDIC CP-037 collating key and Zoned Decimal sign-overpunch codec.
 
-* Collating (PRD Failure Mode 1): EBCDIC orders [a-z] < [A-Z] < [0-9], the
+* Collating: EBCDIC orders [a-z] < [A-Z] < [0-9], the
   reverse of ASCII for digits. Sort with ``ebcdic_sort_key``, never native str order.
-* Zoned Decimal (PRD Failure Mode 3): the sign lives in the zone nibble of the
+* Zoned Decimal: the sign lives in the zone nibble of the
   last digit byte. ``+12345`` -> "1234E" (C5), ``-12345`` -> "1234N" (D5).
 """
 

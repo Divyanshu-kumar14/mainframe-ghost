@@ -1,10 +1,10 @@
 # Requirements: MainframeGhost Parity Sentinel
 
-Source of truth: `specs/PRD.md` (Sections 4, 5.1, 8). All requirements use EARS syntax.
+All requirements use EARS syntax.
 
 ## Glossary
 
-- **Golden Record**: Byte-exact output of the original COBOL program as compiled and run by GnuCOBOL (`cobol/fixtures/`), plus Test Vectors A-E in PRD Section 8.
+- **Golden Record**: Byte-exact output of the original COBOL program as compiled and run by GnuCOBOL (`cobol/fixtures/`), plus the Golden Test Vectors A-E below.
 - **Candidate**: The Python service a tool call proposes to write.
 - **Parity Drift**: Any difference between the Golden Record and an engine or candidate output, measured as `drifted / total` over the 10,000-record corpus.
 - **S0C7**: Synthetic Decimal Data Exception raised on invalid packed/zoned nibbles.
@@ -90,7 +90,7 @@ These must never be weakened to make a test pass.
 
 ## REQ-MF-005 (Supporting): Memory Layout Fidelity
 
-Derived from PRD Failure Modes 4 and 5.
+Derived from the REDEFINES and SYNC failure modes.
 
 1. *When* a `REDEFINES` clause is parsed, the system *shall* map redefining items to the same byte offset as the redefined item, backed by a single shared `bytearray`.
 2. *When* `SYNCHRONIZED` is specified, the system *shall* insert slack bytes so the item offset is a multiple of 2 (S9-S9(4)), 4 (S9(5)-S9(18)) for binary items, and 8 for COMP-2 items.

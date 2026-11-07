@@ -14,7 +14,7 @@ COBOL source being reproduced (no ROUNDED phrase, so results truncate toward zer
     COMPUTE WS-NEW-BALANCE = ACCT-BALANCE + WS-INTEREST.
     SORT ... ON ASCENDING KEY ACCT-KEY                 *> EBCDIC CP-037 order
 
-Parity rules (specs/PRD.md Sections 4 and 5.2):
+Parity rules (.kiro/steering/cobol_parity.md):
 * decimal.Decimal only, explicit Context(prec=28, rounding=ROUND_DOWN).
 * Results quantized with ROUND_DOWN, never the built-in rounding function.
 * JSON parsed with parse_float=Decimal; IEEE 754 floats are rejected with TypeError.

@@ -1,6 +1,6 @@
 # Design: MainframeGhost Parity Sentinel
 
-Source of truth: `specs/PRD.md`. Implements REQ-MF-001..007.
+Implements REQ-MF-001..007 from `requirements.md`.
 
 ## 1. System Topology
 

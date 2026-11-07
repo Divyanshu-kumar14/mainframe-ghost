@@ -162,7 +162,7 @@ function nibbleSegs(nibs: string[], digits: number): Seg[] {
 
 function vectorPage(): Row[] {
   const { A, B, C, D } = DATA.vectors;
-  const rows: Row[] = [row(h(' GOLDEN TEST VECTORS  specs/PRD.md SECTION 8  (COMPUTED BY engine/)')), blank()];
+  const rows: Row[] = [row(h(' GOLDEN TEST VECTORS A-E  (.kiro/specs, COMPUTED BY engine/)')), blank()];
   const vec = (v: Comp3Vector) => nibbleSegs(v.nibbles, v.digits);
 
   rows.push(

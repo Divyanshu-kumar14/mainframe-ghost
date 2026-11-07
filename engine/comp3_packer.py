@@ -1,6 +1,6 @@
 """IBM System/390 packed decimal (COMP-3) encoder/decoder.
 
-Layout rules (specs/PRD.md, Failure Mode 2):
+Layout rules (.kiro/specs/mainframe_parity/design.md section 2):
 
 * Length:  L = floor(D / 2) + 1 bytes for D declared digits.
 * Even D:  a leading 0x0 pad nibble fills the high half of byte 0.

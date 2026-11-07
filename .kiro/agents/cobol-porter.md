@@ -3,7 +3,7 @@ description: Ports COBOL programs and copybooks in this repo to Python 3.12 serv
 tools: ["read", "write", "shell", "@mainframe-inspector"]
 resources:
   - file://.kiro/steering/cobol_parity.md
-  - file://specs/PRD.md
+  - file://.kiro/specs/mainframe_parity/requirements.md
   - skill://.kiro/skills/cobol-ebcdic-specialist/SKILL.md
   - skill://.kiro/skills/aws-bedrock-lambda-modernizer/SKILL.md
 permissions:

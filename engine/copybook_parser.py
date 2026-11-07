@@ -2,7 +2,7 @@
 
 Builds an AST of data-description entries (levels 01-49, plus 77; 88 condition
 names are skipped), computes byte offsets, overlays ``REDEFINES`` onto the same
-storage, and injects ``SYNCHRONIZED`` slack bytes (PRD Failure Modes 4 and 5).
+storage, and injects ``SYNCHRONIZED`` slack bytes (see .kiro/specs/mainframe_parity/design.md section 5).
 
 Supported clauses: PIC/PICTURE (X, A, 9, S, V with repeat counts), USAGE and bare
 DISPLAY / COMP / COMP-3 / COMP-1 / COMP-2 / BINARY / PACKED-DECIMAL,
