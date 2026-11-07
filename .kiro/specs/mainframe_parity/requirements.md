@@ -59,7 +59,7 @@ Source of truth: `specs/PRD.md` (Sections 4, 5.1, 8). All requirements use EARS 
 Derived from PRD Failure Modes 4 and 5.
 
 1. *When* a `REDEFINES` clause is parsed, the system *shall* map redefining items to the same byte offset as the redefined item, backed by a single shared `bytearray`.
-2. *When* `SYNCHRONIZED` is specified, the system *shall* insert slack bytes so the item offset is a multiple of 2 (S9-S9(4)), 4 (S9(5)-S9(9)), or 8 (S9(10)-S9(18)) for binary items.
+2. *When* `SYNCHRONIZED` is specified, the system *shall* insert slack bytes so the item offset is a multiple of 2 (S9-S9(4)), 4 (S9(5)-S9(18)) for binary items, and 8 for COMP-2 items.
 3. *When* an update is made via a `REDEFINES` alias, the system *shall* reflect the change in every other alias of that storage.
 
 ## Traceability

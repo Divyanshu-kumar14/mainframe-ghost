@@ -55,7 +55,8 @@ def encode_zoned(value: object, digits: int, scale: int = 0, signed: bool = True
         raise ValueError("digits must be a positive int")
     if not 0 <= scale <= digits:
         raise ValueError("scale must satisfy 0 <= scale <= digits")
-    number = scaled_int(value, scale)
+    dec = coerce_decimal(value)
+    number = scaled_int(dec, scale)
     if number < 0 and not signed:
         raise ValueError("negative value in an unsigned zoned field")
     magnitude = str(abs(number))
@@ -64,7 +65,9 @@ def encode_zoned(value: object, digits: int, scale: int = 0, signed: bool = True
     body = magnitude.zfill(digits)
     if not signed:
         return body
-    table = NEGATIVE_OVERPUNCH if number < 0 else POSITIVE_OVERPUNCH
+    # An explicit negative zero ("-0") keeps its sign: "}" is -0, "{" is +0.
+    negative = number < 0 or (number == 0 and dec == 0 and dec.is_signed())
+    table = NEGATIVE_OVERPUNCH if negative else POSITIVE_OVERPUNCH
     return body[:-1] + table[int(body[-1])]
 
 
@@ -87,7 +90,7 @@ def decode_zoned(text: str, scale: int = 0) -> Decimal:
         raise S0C7Abend(f"S0C7 Abend: invalid zoned sign character {last!r}",
                         index=len(text) - 1, kind="sign")
     number = int("".join(leading) + str(last_digit)) * sign
-    return decimal_from_scaled_int(number, scale)
+    return decimal_from_scaled_int(number, scale, negative=sign < 0)
 
 
 def encode_zoned_bytes(value: object, digits: int, scale: int = 0, signed: bool = True) -> bytes:
@@ -116,9 +119,8 @@ def decode_zoned_bytes(data: bytes, scale: int = 0, signed: bool = True) -> Deci
         raise S0C7Abend(f"S0C7 Abend: invalid sign zone 0x{last_zone:X}",
                         nibble=last_zone, index=last_index, kind="sign")
     number = int("".join(map(str, digits)))
-    if last_zone == 0xD and signed:
-        number = -number
-    return decimal_from_scaled_int(number, scale)
+    negative = last_zone == 0xD and signed
+    return decimal_from_scaled_int(-number if negative else number, scale, negative=negative)
 
 
 __all__ = [

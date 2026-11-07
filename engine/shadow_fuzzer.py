@@ -20,6 +20,7 @@ import argparse
 import importlib.util
 import io
 import json
+import os
 import random
 import sys
 import tokenize
@@ -240,6 +241,7 @@ class ParityReport:
     abend_mismatches: int = 0
     s0c7_injected_detected: int = 0
     candidate_drift: int = 0
+    seed: int = DEFAULT_SEED
     violations: list[Violation] = field(default_factory=list)
     packed_dump_abends: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
@@ -375,7 +377,7 @@ def check_packed_dumps(dumps: list, report: ParityReport) -> None:
 
 def run_shadow(records: int = DEFAULT_RECORDS, seed: int = DEFAULT_SEED, candidate=None,
                battery: int = BATTERY_SIZE) -> ParityReport:
-    report = ParityReport()
+    report = ParityReport(seed=seed)
     corpus = generate_records(records, seed)
     report.records = len(corpus)
     for rec in corpus:
@@ -407,6 +409,63 @@ def load_candidate(path: str):
     return func
 
 
+# ----------------------------------------------------------------------------- 3270 screen
+
+SCREEN_COLUMNS = 80
+SCREEN_ROWS = 24
+_P31_GREEN = "\x1b[38;2;51;255;51m"    # primary phosphor  #33ff33
+_P31_DIM = "\x1b[38;2;31;138;31m"      # muted phosphor    #1f8a1f
+_ABEND_RED = "\x1b[38;2;255;51;51m"    # S0C7 abend red    #ff3333
+_RESET = "\x1b[0m"
+
+
+def render_3270(report: ParityReport, color: bool = False) -> str:
+    """Render the report as an 80x24 IBM 3270 green-phosphor screen.
+
+    Plain ASCII when ``color`` is false, so logs and the hook stay machine readable.
+    """
+    sample = encode_comp3(Decimal("-1234567.89"), 9, 2)
+    hex_row = " ".join(f"{b:02X}" for b in sample)
+    ok = report.passed
+    rows: list[tuple[str, str]] = []  # (text, style) style: g=green d=dim r=red
+
+    def add(text: str = "", style: str = "g") -> None:
+        rows.append((text[:SCREEN_COLUMNS].ljust(SCREEN_COLUMNS), style))
+
+    add("MAINFRAMEGHOST  PARITY SENTINEL  --  DUAL-ENGINE SHADOW FUZZER")
+    add("=" * SCREEN_COLUMNS, "d")
+    add()
+    add(f"  GOLDEN ENGINE   INTEGER / NIBBLE ARITHMETIC     RECORDS . . . : {report.records:>8}")
+    add(f"  MODERN ENGINE   DECIMAL PREC=28 ROUND_DOWN      S0C7 BATTERY  : {report.battery:>8}")
+    add(f"  SEED . . . . .  {report.seed:<10}                      COMPARISONS . : {report.comparisons:>8}")
+    add()
+    add(f"  PACKED DECIMAL  {hex_row} | PIC S9(7)V99 COMP-3 | -1234567.89", "d")
+    add()
+    add(f"  PARITY DRIFT . . . . . . . . . . . . . . . : {report.drift_pct:>12}")
+    add(f"  DRIFTED COMPARISONS  . . . . . . . . . . . : {report.drifted:>12}")
+    add(f"  EBCDIC SORT MISMATCHES . . . . . . . . . . : {report.sort_mismatches:>12}")
+    add(f"  S0C7 ON VALID DATA . . . . . . . . . . . . : {report.s0c7_unexpected:>12}")
+    add(f"  S0C7 INJECTED / DETECTED . . . . . . . . . : {report.s0c7_injected_detected:>12}")
+    add(f"  IEEE 754 VIOLATIONS  . . . . . . . . . . . : {len(report.violations):>12}")
+    add()
+    if ok:
+        add("  *** ZERO DRIFT -- PARITY VERIFIED -- EXIT CODE 0 ***")
+    else:
+        add("  *** PARITY DRIFT / S0C7 ABEND -- DEPLOYMENT VETOED -- EXIT CODE 2 ***", "r")
+        details = [str(v) for v in report.violations] + report.packed_dump_abends + report.examples
+        for line in details[:3]:
+            add(f"  {line}", "r")
+    while len(rows) < SCREEN_ROWS - 2:
+        add()
+    add("-" * SCREEN_COLUMNS, "d")
+    add("SYSTEM READY   [z/OS V2.5]   SEC: RACF-L4   LPAR: PROD01   OIA: NUMA [CONNECTED]", "d")
+    rows = rows[:SCREEN_ROWS]
+    if not color:
+        return "\n".join(text for text, _ in rows)
+    styles = {"g": _P31_GREEN, "d": _P31_DIM, "r": _ABEND_RED}
+    return "\n".join(f"{styles[style]}{text}{_RESET}" for text, style in rows)
+
+
 # ----------------------------------------------------------------------------- CLI
 
 def verify_stdin(raw: str, records: int, seed: int) -> tuple[int, ParityReport]:
@@ -435,6 +494,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scan", action="append", default=[], metavar="FILE",
                         help="statically scan a Python file for float contamination")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
+    parser.add_argument("--3270", dest="screen", action="store_true",
+                        help="render an 80x24 IBM 3270 green-phosphor screen")
+    parser.add_argument("--no-color", action="store_true",
+                        help="plain 3270 screen without ANSI color")
     args = parser.parse_args(argv)
     try:
         if args.verify_stdin:
@@ -448,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
             code = 0 if report.passed else 2
         if args.json:
             print(json.dumps(report.as_dict(), indent=2))
+        elif args.screen:
+            use_color = sys.stdout.isatty() and not args.no_color and "NO_COLOR" not in os.environ
+            print(render_3270(report, color=use_color))
         else:
             print(report.summary())
             for violation in report.violations:

@@ -234,12 +234,15 @@ def test_sync_slack_bytes_and_record_length():
 @pytest.mark.parametrize(("pic", "prefix", "expected_offset", "expected_size"), [
     ("S9(4) COMP SYNC", 1, 2, 2),
     ("S9(9) COMP SYNC", 1, 4, 4),
-    ("S9(18) COMP SYNC", 1, 8, 8),
+    ("S9(18) COMP SYNC", 1, 4, 8),   # 5-18 digits align on a 4-byte boundary
+    ("S9(18) COMP SYNC", 5, 8, 8),
+    ("COMP-2 SYNC", 1, 8, 8),
     ("S9(9) COMP", 1, 1, 4),         # without SYNC no slack
     ("S9(7) COMP-3 SYNC", 1, 1, 4),  # SYNC never aligns packed decimal
 ])
 def test_sync_alignment_rules(pic, prefix, expected_offset, expected_size):
-    text = f"01 R.\n 05 A PIC X({prefix}).\n 05 B PIC {pic}.\n"
+    clause = pic if pic.startswith("COMP-") else f"PIC {pic}"
+    text = f"01 R.\n 05 A PIC X({prefix}).\n 05 B {clause}.\n"
     rows = {row["name"]: row for row in parse_copybook(text).layout_table()}
     assert rows["B"]["offset"] == expected_offset
     assert rows["B"]["size"] == expected_size
@@ -425,3 +428,38 @@ def test_fuzzer_cli_exit_codes():
     bad = subprocess.run([sys.executable, str(FUZZER), "--records", "10", "--candidate", "/nonexistent.py"],
                          capture_output=True, text=True, cwd=ROOT, timeout=60)
     assert bad.returncode == 1                      # sentinel error, never a silent pass
+
+
+# ------------------------------------------------------------------ Zoned zero signs and 3270 screen
+
+def test_zoned_zero_overpunch_braces():
+    assert encode_zoned(0, 3) == "00{"
+    assert encode_zoned(Decimal("-0"), 3) == "00}"
+    assert decode_zoned("00{") == 0 and not decode_zoned("00{").is_signed()
+    assert decode_zoned("00}") == 0 and decode_zoned("00}").is_signed()
+    assert encode_zoned_bytes(0, 3).hex().upper() == "F0F0C0"
+    assert encode_zoned_bytes(Decimal("-0"), 3).hex().upper() == "F0F0D0"
+
+
+def test_3270_screen_is_80x24_and_shows_zero_drift():
+    from engine.shadow_fuzzer import render_3270
+
+    screen = render_3270(run_shadow(500, seed=3))
+    lines = screen.split("\n")
+    assert len(lines) == 24
+    assert all(len(line) == 80 for line in lines)
+    assert "ZERO DRIFT -- PARITY VERIFIED" in screen
+    assert "0.00000%" in screen
+    assert "12 34 56 78 9D" in screen
+
+    failing = ParityReport()
+    failing.drifted = failing.comparisons = 1
+    assert "DEPLOYMENT VETOED" in render_3270(failing, color=True)
+    assert "\x1b[38;2;255;51;51m" in render_3270(failing, color=True)
+
+
+def test_3270_cli_flag():
+    out = subprocess.run([sys.executable, str(FUZZER), "--records", "300", "--3270", "--no-color"],
+                         capture_output=True, text=True, cwd=ROOT, timeout=60)
+    assert out.returncode == 0
+    assert "ZERO DRIFT" in out.stdout

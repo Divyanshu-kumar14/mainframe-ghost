@@ -85,10 +85,14 @@ def scaled_int(value: object, scale: int) -> int:
     return -coefficient if sign and coefficient else coefficient
 
 
-def decimal_from_scaled_int(number: int, scale: int) -> Decimal:
-    """Exact Decimal with exponent ``-scale`` (AC-001.3)."""
+def decimal_from_scaled_int(number: int, scale: int, negative: bool | None = None) -> Decimal:
+    """Exact Decimal with exponent ``-scale`` (AC-001.3).
+
+    ``negative`` forces the sign flag, so a zoned "}" decodes to Decimal("-0").
+    """
     digits = tuple(int(c) for c in str(abs(number)))
-    return Decimal((1 if number < 0 else 0, digits, -scale))
+    sign = (number < 0) if negative is None else negative
+    return Decimal((1 if sign else 0, digits, -scale))
 
 
 def encode_comp3(value: object, digits: int, scale: int = 0, signed: bool = True) -> bytes:

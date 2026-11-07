@@ -181,7 +181,7 @@ All aliases are views onto one `bytearray`; no per-field heap copies.
 ### 5.3 SYNCHRONIZED alignment
 
 ```
-align  = 2 if binary D<=4 ; 4 if 5<=D<=9 ; 8 if 10<=D<=18
+align  = 2 if binary D<=4 ; 4 if 5<=D<=18 ; 4 for COMP-1 ; 8 for COMP-2
 slack  = (-offset) mod align
 offset' = offset + slack
 ```

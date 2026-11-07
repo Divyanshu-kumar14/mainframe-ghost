@@ -337,9 +337,19 @@ def _elementary_size(fld: Field) -> int:
 
 
 def _alignment(fld: Field, size: int) -> int:
-    """Natural boundary for a SYNCHRONIZED binary item: 2, 4 or 8 bytes."""
-    if fld.effective_usage in ("BINARY", "COMP-1", "COMP-2") and size in (2, 4, 8):
-        return size
+    """Boundary (relative to record start) for a SYNCHRONIZED item.
+
+    BINARY 1-4 digits (2 bytes): multiple of 2. BINARY 5-18 digits (4 or 8 bytes):
+    multiple of 4. COMP-1: multiple of 4. COMP-2: multiple of 8.
+    Packed decimal and DISPLAY items are never aligned.
+    """
+    usage = fld.effective_usage
+    if usage == "COMP-2":
+        return 8
+    if usage == "COMP-1":
+        return 4
+    if usage == "BINARY":
+        return 2 if size == 2 else 4
     return 1
 
 

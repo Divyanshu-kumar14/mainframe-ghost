@@ -22,7 +22,7 @@ These rules govern all financial and mainframe-compat code in this repository. S
 - Sign nibbles: `0xC` positive, `0xD` negative, `0xF` unsigned. Anything else, or a digit nibble above `0x9`, raises S0C7. Never silently repair.
 - Zoned Decimal: translate overpunch (`{`,`A`-`I` = +0..+9; `}`,`J`-`R` = -0..-9). Never `int()` a raw zoned string or strip the trailing letter.
 - Map `REDEFINES` to views over one shared `bytearray`. Never create independent fields for redefined storage.
-- For `SYNCHRONIZED` binary items, insert slack bytes: align 2 (D<=4), 4 (D 5-9), 8 (D 10-18).
+- For `SYNCHRONIZED` binary items, insert slack bytes: align 2 (D<=4), 4 (D 5-18), 8 (COMP-2).
 - Never compute record size by summing field lengths when `SYNC` is present.
 
 ## Sorting
