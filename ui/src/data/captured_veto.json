@@ -1,0 +1,22 @@
+{
+  "source": "Live Kiro PreToolUse veto: fs_write of services/vulnerable_service.py was blocked by .kiro/hooks/parity_guard.json on 2026-11-08. Output copied verbatim.",
+  "tool_name": "fs_write",
+  "target": "services/vulnerable_service.py",
+  "exit_code": 2,
+  "stdout": [],
+  "stderr": [
+    "[FAIL] drift=0.00000% records=10000 battery=500 drifted=0 sort_mismatches=0 s0c7_unexpected=0 abend_mismatches=0 s0c7_injected_detected=389 violations=5",
+    "  Float precision violation on services/vulnerable_service.py:19: forbidden round() call",
+    "  Float precision violation on services/vulnerable_service.py:19: forbidden float() call",
+    "  Float precision violation on services/vulnerable_service.py:19: forbidden float() call",
+    "  Float precision violation on services/vulnerable_service.py:19: float literal 12.0",
+    "  Float precision violation on services/vulnerable_service.py:31: forbidden float() call",
+    "[VETO] Mainframe Parity Sentinel: semantic drift, S0C7 abend, or IEEE 754 precision violation detected.",
+    "[VETO] Halting tool execution to prevent ledger corruption. Fix with decimal.Decimal + ROUND_DOWN and exact COMP-3 nibbles, then retry."
+  ],
+  "source_excerpt": [
+    "def accrue_monthly_interest(balance, annual_rate):",
+    "    # BUG: binary float math + round-half-even. COBOL truncates toward zero.",
+    "    return round(float(balance) * float(annual_rate) / 12.0, 2)"
+  ]
+}

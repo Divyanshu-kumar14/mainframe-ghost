@@ -1,0 +1,252 @@
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ phosphor themes */
+/* P31 green (IBM 3270) and P4 amber (IBM 3279 night mode); abend red is shared. */
+:root,
+[data-phosphor='green'] {
+  --ph: #33ff33;
+  --ph-dim: #1f8a1f;
+  --ph-hi: #66ff66;
+  --ph-bg: #051405;
+  --ph-glow: 51, 255, 51;
+}
+
+[data-phosphor='amber'] {
+  --ph: #ffb000;
+  --ph-dim: #996a00;
+  --ph-hi: #ffd04d;
+  --ph-bg: #140d02;
+  --ph-glow: 255, 176, 0;
+}
+
+:root {
+  --abend: #ff3333;
+  --abend-glow: 255, 51, 51;
+}
+
+@theme inline {
+  --color-ph: var(--ph);
+  --color-ph-dim: var(--ph-dim);
+  --color-ph-hi: var(--ph-hi);
+  --color-ph-bg: var(--ph-bg);
+  --color-abend: var(--abend);
+  --font-mono: 'IBM Plex Mono', 'Courier New', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 50% 20%, #1a1a17 0%, #070706 70%);
+  color: var(--ph);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--ph);
+  color: var(--ph-bg);
+}
+
+/* ------------------------------------------------------------------ phosphor glow */
+.phosphor {
+  color: var(--ph);
+  text-shadow:
+    0 0 2px rgba(var(--ph-glow), 0.9),
+    0 0 6px rgba(var(--ph-glow), 0.55),
+    0 0 14px rgba(var(--ph-glow), 0.25);
+}
+
+.phosphor-dim {
+  color: var(--ph-dim);
+  text-shadow: 0 0 4px rgba(var(--ph-glow), 0.25);
+}
+
+.phosphor-hi {
+  color: var(--ph-hi);
+  text-shadow:
+    0 0 3px rgba(var(--ph-glow), 1),
+    0 0 10px rgba(var(--ph-glow), 0.7),
+    0 0 22px rgba(var(--ph-glow), 0.35);
+}
+
+.abend-text {
+  color: var(--abend);
+  text-shadow:
+    0 0 3px rgba(var(--abend-glow), 0.95),
+    0 0 10px rgba(var(--abend-glow), 0.55);
+}
+
+.abend-inverse {
+  background: var(--abend);
+  color: #1a0000;
+  box-shadow: 0 0 12px rgba(var(--abend-glow), 0.7);
+}
+
+.ph-inverse {
+  background: var(--ph);
+  color: var(--ph-bg);
+  box-shadow: 0 0 10px rgba(var(--ph-glow), 0.6);
+}
+
+.glow-border {
+  border-color: var(--ph-dim);
+  box-shadow:
+    0 0 6px rgba(var(--ph-glow), 0.25),
+    inset 0 0 12px rgba(var(--ph-glow), 0.08);
+}
+
+/* ------------------------------------------------------------------ CRT tube */
+.crt-bezel {
+  background: linear-gradient(160deg, #3b3a35 0%, #1d1c19 45%, #0d0d0b 100%);
+  border-radius: 28px;
+  padding: 22px;
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.7),
+    inset 0 2px 1px rgba(255, 255, 255, 0.08),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.6);
+}
+
+.crt-screen {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, rgba(var(--ph-glow), 0.07) 0%, transparent 70%),
+    var(--ph-bg);
+  /* convex glass: asymmetric radii read as barrel curvature */
+  border-radius: 4% / 6%;
+  isolation: isolate;
+}
+
+/* Scanlines + RGB triad mask */
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.32) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.012), rgba(0, 0, 255, 0.03));
+  background-size: 100% 3px, 6px 100%;
+}
+
+/* Glass barrel vignette: dark falloff at the curved edges + specular highlight */
+.crt-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 120% 85% at 30% 12%, rgba(255, 255, 255, 0.055) 0%, transparent 38%),
+    radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, 0.55) 100%);
+  box-shadow:
+    inset 0 0 80px rgba(0, 0, 0, 0.85),
+    inset 0 0 18px rgba(0, 0, 0, 0.9);
+}
+
+/* Rolling refresh band */
+.crt-roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(var(--ph-glow), 0.045), transparent);
+  animation: crt-roll 7s linear infinite;
+}
+
+@keyframes crt-roll {
+  from { top: -20%; }
+  to { top: 110%; }
+}
+
+@keyframes crt-flicker {
+  0% { opacity: 0.982; }
+  20% { opacity: 1; }
+  40% { opacity: 0.988; }
+  60% { opacity: 0.996; }
+  80% { opacity: 0.985; }
+  100% { opacity: 1; }
+}
+
+.crt-flicker {
+  animation: crt-flicker 0.16s infinite;
+}
+
+/* Power-on: beam expands from a horizontal line */
+@keyframes crt-on {
+  0% { transform: scale(1, 0.004); filter: brightness(4); opacity: 0.4; }
+  45% { transform: scale(1, 0.004); filter: brightness(4); opacity: 1; }
+  100% { transform: scale(1, 1); filter: brightness(1); }
+}
+
+.crt-power-on {
+  animation: crt-on 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Abend: red flash across the tube */
+@keyframes abend-flash {
+  0%, 100% { box-shadow: inset 0 0 0 rgba(var(--abend-glow), 0); }
+  50% { box-shadow: inset 0 0 120px rgba(var(--abend-glow), 0.45); }
+}
+
+.crt-abend {
+  animation: abend-flash 0.5s ease-in-out 4;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.blink {
+  animation: blink 1.06s steps(1) infinite;
+}
+
+@keyframes veto-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+.veto-pulse {
+  animation: veto-pulse 0.9s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------ 80x24 grid */
+.term-host {
+  container-type: inline-size;
+}
+
+.term-grid {
+  /* 80 columns of a 0.6em monospace advance fill the host width */
+  font-size: calc(100cqw / 49.5);
+  line-height: 1.32;
+  white-space: pre;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+}
+
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ph-dim) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-flicker,
+  .crt-roll,
+  .crt-power-on,
+  .crt-abend,
+  .blink,
+  .veto-pulse {
+    animation: none !important;
+  }
+}
