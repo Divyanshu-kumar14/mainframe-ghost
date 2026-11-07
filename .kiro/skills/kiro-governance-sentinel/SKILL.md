@@ -1,6 +1,6 @@
 ---
 name: kiro-governance-sentinel
-description: Deep expertise in Kiro native architecture, including EARS specification syntax (.kiro/specs/), deterministic steering files (.kiro/steering/), Model Context Protocol integration (.kiro/mcp/), multi-agent crew definitions (.kiro/crew/), and native v2 PreToolUse execution hooks (.kiro/hooks/) that enforce POSIX Exit Code 2 deployment vetoes. Use whenever configuring, debugging, or authoring Kiro governance primitives.
+description: Deep expertise in Kiro native architecture, including EARS specification syntax (.kiro/specs/), deterministic steering files (.kiro/steering/), Model Context Protocol integration (.kiro/mcp/), custom agents (.kiro/agents/), and native v2 PreToolUse execution hooks (.kiro/hooks/) that enforce POSIX Exit Code 2 deployment vetoes. Use whenever configuring, debugging, or authoring Kiro governance primitives.
 ---
 
 # Kiro Governance & Parity Sentinel Skill
@@ -30,9 +30,12 @@ A production-grade Kiro workspace enforces safety through the `.kiro/` directory
 │   └── server.py            # FastMCP copybook and memory inspection server
 ├── settings/
 │   └── mcp.json             # MCP server registrations
-└── crew/
-    └── crew.yaml            # Multi-agent crew topology & roles
+└── agents/
+    ├── cobol-porter.md      # writes services; denied write access to hooks/fixtures
+    └── parity-auditor.md    # read-only; audits through the MCP tools
 ```
+
+Kiro Crew is a separate local app; its docs describe no repository-level crew file, so none is kept here.
 
 ---
 
@@ -74,14 +77,15 @@ Kiro v2 hooks execute directly before or after IDE events.
   "hooks": [
     {
       "name": "Mainframe Parity Sentinel Guard",
-      "description": "Intercepts tool execution, runs dual-engine parity fuzzer, and halts with Exit Code 2 on semantic drift.",
+      "description": "Intercepts tool execution, runs the proposed code against GnuCOBOL output, and vetoes with POSIX Exit Code 2 on semantic drift.",
       "trigger": "PreToolUse",
-      "matcher": ".*(deploy_lambda|write_to_file|edit_file|bash).*",
+      "matcher": "^(fs_write|fs_append|str_replace|execute_bash)$|deploy_lambda",
       "action": {
         "type": "command",
-        "command": ".kiro/hooks/bin/verify_modernization_parity.sh",
-        "timeout": 30
-      }
+        "command": ".kiro/hooks/bin/verify_modernization_parity.sh"
+      },
+      "timeout": 30,
+      "enabled": true
     }
   ]
 }
@@ -92,23 +96,17 @@ When Kiro invokes a `PreToolUse` command hook:
 - The hook receives the tool execution payload via **STDIN**.
 - **Exit Code 0:** Execution approved. Kiro proceeds with the tool call.
 - **Exit Code 2 (HARD VETO):** Execution rejected. Kiro aborts the tool call, displays the error message output by the script in the chat pane, and commands the agent to fix the violation.
-- **Exit Code 1:** Script runtime error / crash.
+- **Any other non-zero code:** non-blocking warning in Kiro. Never map drift to exit 1.
 
-### Bash Hook Script (`.kiro/hooks/bin/verify_modernization_parity.sh`)
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+Notes: built-in tool IDs are snake_case (`fs_write`, `fs_append`, `str_replace`, `execute_bash`); `timeout` is a sibling of `action`; hooks load at session start.
 
-# Ingest proposed tool payload from STDIN
-INPUT_PAYLOAD=$(cat || echo "{}")
+### Hook Script
 
-# Run shadow fuzzer test
-if ! python3 engine/shadow_fuzzer.py --verify-stdin <<< "$INPUT_PAYLOAD" 2>&1; then
-    echo "[VETO] Mainframe Parity Sentinel: Detected semantic drift or IEEE 754 precision violation!" >&2
-    echo "[VETO] Halting deployment pipeline to prevent ledger corruption." >&2
-    exit 2
-fi
+The real script is `.kiro/hooks/bin/verify_modernization_parity.sh`. Its shape:
 
-echo "[PASS] Parity verified: 0.00000% drift against IBM z/OS golden records."
-exit 0
-```
+1. Read the payload from STDIN.
+2. If `engine/shadow_fuzzer.py` is missing, exit 2 (fail closed).
+3. Pipe the payload to `python3 engine/shadow_fuzzer.py --verify-stdin`, which scans the proposed file, rebuilds it post-write, executes it in a sandbox and diffs it against `cobol/fixtures/`.
+4. Map the fuzzer's exit code: 0 to `[PASS] ... against the GnuCOBOL oracle` (exit 0), 2 to `[VETO]` on STDERR (exit 2), anything else to `[ERROR]` (exit 1).
+
+Never edit the hook, the fixtures or the golden vectors to make a write pass.

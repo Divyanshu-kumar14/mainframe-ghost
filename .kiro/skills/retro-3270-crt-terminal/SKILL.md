@@ -1,6 +1,6 @@
 ---
 name: retro-3270-crt-terminal
-description: Design and implementation patterns for building authentic retro IBM 3270 CRT terminal user interfaces in React 19, Tailwind CSS, and Web Audio API. Covers P31 green / P4 amber phosphor color palettes, CRT scanlines, screen curvature shaders, phosphor decay persistence, and mechanical acoustic key click synthesis. Use when building retro-futuristic, spooky, or vintage terminal cockpits for Track 4: Costume Contest.
+description: Design and implementation patterns for building authentic retro IBM 3270 CRT terminal user interfaces in React 19, Tailwind CSS, and Web Audio API. Covers P31 green / P4 amber phosphor color palettes, CRT scanlines, screen curvature shaders, phosphor decay persistence, and mechanical acoustic key click synthesis. Use when building retro-futuristic, spooky, or vintage terminal cockpits such as the MainframeGhost 3270 cockpit.
 ---
 
 # Retro IBM 3270 CRT Ghost Terminal Skill
