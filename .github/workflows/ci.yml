@@ -19,4 +19,5 @@ jobs:
         run: python3 engine/shadow_fuzzer.py --candidate services/hardened_service.py
       - name: Golden path - float vetoes
         run: |
+          set +e
           python3 engine/shadow_fuzzer.py --candidate tests/fixtures/candidates/round_floor.py; rc=$?; if [ $rc -ne 2 ]; then echo "expected exit 2, got $rc"; exit 1; fi
