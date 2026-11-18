@@ -26,12 +26,13 @@
 - [How it works](#how-it-works)
 - [Results](#results)
 - [Quick start](#quick-start)
+- [Interactive walkthrough](docs/DEMO_WALKTHROUGH.md)
 - [Kiro integration](#kiro-integration)
 - [COBOL ground truth](#cobol-ground-truth)
 - [Amazon Bedrock](#amazon-bedrock)
 - [The cockpit](#the-cockpit)
 - [Repository layout](#repository-layout)
-- [Architectural Horizon & Scope](#architectural-horizon--scope)
+- [Architectural Invariants & Enterprise Roadmap](#architectural-invariants--enterprise-roadmap)
 - [License](#license)
 
 ## Why
