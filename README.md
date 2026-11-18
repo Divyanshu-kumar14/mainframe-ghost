@@ -4,6 +4,10 @@
 
 **A Kiro `PreToolUse` gate that runs AI-ported COBOL against the real compiler's output before the agent can save it.**
 
+*Float ports mispost $49 per 10,000 accounts. Kiro blocks the save.*
+
+> By leveraging Kiro PreToolUse hooks, steering, specs, agents, and MCP as our execution pipeline, we turn days of ledger triage into a 60-second autonomous veto with 0/10,000 drift on the hardened path.
+
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 [![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen.svg)](tests/)
@@ -27,10 +31,12 @@
 - [Amazon Bedrock](#amazon-bedrock)
 - [The cockpit](#the-cockpit)
 - [Repository layout](#repository-layout)
-- [Limitations](#limitations)
+- [Architectural Horizon & Scope](#architectural-horizon--scope)
 - [License](#license)
 
 ## Why
+
+Friday 4pm, a bank port passes review: clean `Decimal`, green unit tests, positive balances only. In production it misposts a cent on about half the accounts — 5,383/10,000 drift, $49.37 per batch in our seeded corpus — because rounding lives in bytes, not business logic.
 
 Banks still run COBOL batch jobs, and AI agents are now being asked to port them. The bugs that matter in those ports are rarely in the business logic. They are in how numbers are stored and rounded.
 
@@ -64,6 +70,15 @@ MainframeGhost checks behaviour, not syntax. It sits in the agent's write path a
 
 The sandbox is a child process started with `python -I -B`. It gets an empty environment (no AWS or Kiro credentials), a throwaway working directory, CPU, memory and file-size limits, a 30-second timeout and, on Linux, no network (`unshare --net`). The candidate's own `print` output cannot reach the verdict channel.
 
+```mermaid
+flowchart LR
+    User --> Porter[Kiro cobol-porter agent]
+    Porter --> Hook[PreToolUse parity gate]
+    Hook --> Sandbox[sandboxed run: 10k accounts vs GnuCOBOL]
+    Sandbox -->|exit 0| Save[write proceeds]
+    Sandbox -->|exit 2| Veto[write blocked + drift to agent]
+```
+
 ## Results
 
 Every number below comes from the real hook. [`scripts/export_ui_vectors.py`](scripts/export_ui_vectors.py) pipes each file through it and refuses to export if the hook and the in-process verdict disagree.
@@ -80,6 +95,15 @@ The last two rows are the reason the project exists. A static check approves bot
 *Misposted* is the sum of `|candidate − COBOL|` over the seeded 10,000-account corpus.
 
 ## Quick start
+
+**Golden Path demo (4 commands):**
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+pytest -q
+python3 engine/shadow_fuzzer.py --candidate services/hardened_service.py; echo $?   # 0
+python3 engine/shadow_fuzzer.py --candidate tests/fixtures/candidates/round_floor.py; echo $?   # 2
+```
 
 **Requirements:** Linux or macOS, Python 3.12+, Node 20+. Docker is only needed to regenerate the COBOL fixtures.
 
@@ -163,6 +187,8 @@ python3 -m services.bedrock_transpiler cobol/src/intaccr_batch.cbl --dry-run    
 
 `--capture` saves the raw response and its verdict under `tests/fixtures/candidates/`, and the cockpit lists each capture as another candidate. Sonnet 5.5 always uses adaptive thinking, so its output is not deterministic. That is why every response is checked.
 
+> Bedrock transpiler status: implemented, not exercised live in the default demo. No live `--capture` outputs are committed yet; the demo path runs the local hardened/vulnerable/rounding candidates through the same sandboxed diff.
+
 ## The cockpit
 
 A React 19 recreation of an IBM 3278-2 terminal (80×24, P31 green or P4 amber phosphor). It talks to the real engine through [`cockpit/server.py`](cockpit/server.py), which uses only the Python standard library.
@@ -194,13 +220,13 @@ ui/          the 3270 cockpit (React 19, Vite, Tailwind 4)
 docs/        screenshots/, evidence/
 ```
 
-## Limitations
+## Architectural Horizon & Scope
 
-- **One batch step.** The oracle covers monthly interest accrual on one record layout, plus its sort. Each new program needs its own COBOL driver and fixtures.
-- **GnuCOBOL is not IBM Enterprise COBOL.** For this program (one multiply, one divide, truncation on store, COMP-3 and signed zoned output, an EBCDIC sort) the results should match, but they have not been checked on z/OS.
-- **S0C7 is modelled in Python.** GnuCOBOL does not raise S0C7, so the corrupted-dump checks rely on the Python engine.
-- **The sandbox is a hardened subprocess, not a VM.** It guards against accidental damage from generated code, not a determined attacker. Network isolation needs Linux with unprivileged user namespaces; without it the other limits still apply and the verdict says so.
-- **Nothing is deployed.** `hardened_service.py` contains a Lambda handler, but this repository does not deploy it.
+- **Scoped oracle.** Covers monthly interest accrual on one record layout, plus its EBCDIC sort. Each new program needs its own COBOL driver and fixtures — next-quarter driver work.
+- **GnuCOBOL 3.1.2 oracle.** For this program (one multiply, one divide, truncation on store, COMP-3 and signed zoned output, EBCDIC sort) results should match IBM Enterprise COBOL, but z/OS validation is an enterprise milestone, not yet run.
+- **S0C7 battery is Python-modelled.** GnuCOBOL does not raise S0C7, so corrupted-dump checks rely on the Python engine agreement battery (500 cases).
+- **Sandbox is a hardened subprocess, not a VM.** Guards accidental damage from generated code (empty env, throwaway dir, CPU/mem/file limits, 30s timeout, no-net on Linux with user namespaces). Not a determined-attacker boundary; limits are reported in the verdict.
+- **No cloud deployment in this repo.** `hardened_service.py` ships a Lambda handler, but this repo runs air-gapped: loopback `/api/verify` executes, public/static builds show hook-exported presets labelled as presets.
 
 ## License
 
